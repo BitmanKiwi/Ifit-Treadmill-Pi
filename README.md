@@ -1,4 +1,4 @@
-iFit Treadmill Local Controller (No Subscription, BLE, Raspberry Pi)
+<p align="center">iFit Treadmill Local Controller (No Subscription, BLE, Raspberry Pi)</p>
 
 <p align="center">
   <img src="docs/UI.png" width="700">
