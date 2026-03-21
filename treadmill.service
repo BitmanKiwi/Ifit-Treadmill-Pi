@@ -1,0 +1,17 @@
+[Unit]
+Description=Treadmill Control Server
+After=network.target bluetooth.target
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/devoltage/treadmill
+ExecStart=/home/devoltage/treadmill-env/bin/python server.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Treadmill — Manual</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0a; --bg2: #0f0f0f; --bg3: #1a1a1a;
+      --border: #1a1a1a; --orange: #ff8800; --blue: #0088ff;
+      --amber: #ffaa00; --red: #ff3333; --green: #00cc66;
+      --dim: #444; --dimmer: #333; --font: 'DM Mono', monospace;
+    }
+    body { background:var(--bg); color:#fff; font-family:var(--font); min-height:100vh; display:flex; flex-direction:column; max-width:480px; margin:0 auto; }
+
+    .header { padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+    .header-title { font-size:11px; letter-spacing:4px; color:var(--dim); }
+    .nav { display:flex; gap:16px; }
+    .nav a { font-size:11px; letter-spacing:2px; text-decoration:none; color:var(--dim); }
+    .nav a.active { color:var(--orange); }
+
+    .ble-btn {
+      font-family:var(--font); font-size:10px; letter-spacing:2px;
+      padding:6px 12px; border-radius:4px; cursor:pointer; border:1px solid;
+      transition:all 0.2s;
+    }
+    .ble-btn.disconnected { color:var(--dim); border-color:var(--dim); background:none; }
+    .ble-btn.disconnected:hover { color:#fff; border-color:#fff; }
+    .ble-btn.connecting { color:var(--amber); border-color:var(--amber); background:none; cursor:wait; }
+    .ble-btn.connected { color:var(--orange); border-color:var(--orange); background:#ff880010; }
+
+    .mode-bar { padding:8px 24px; background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
+    .mode-indicator { width:8px; height:8px; border-radius:50%; transition:background 0.3s,box-shadow 0.3s; }
+    .mode-label { font-size:11px; letter-spacing:3px; transition:color 0.3s; }
+
+    .speed-section { padding:32px 24px 24px; display:flex; align-items:center; justify-content:center; gap:40px; border-bottom:1px solid var(--border); }
+    .ring-wrap { position:relative; width:140px; height:140px; }
+    .ring-wrap svg { transform:rotate(-90deg); }
+    .ring-center { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; }
+    .ring-kph { font-size:28px; font-weight:500; letter-spacing:-1px; line-height:1; }
+    .ring-unit { font-size:9px; color:var(--dim); letter-spacing:2px; margin-top:2px; }
+    .speed-stats { display:flex; flex-direction:column; gap:16px; }
+    .stat-label { font-size:9px; color:var(--dim); letter-spacing:2px; margin-bottom:2px; }
+    .stat-value { font-size:22px; letter-spacing:-0.5px; }
+    .stat-unit { font-size:11px; color:var(--dim); margin-left:4px; }
+
+    .stats-grid { display:grid; grid-template-columns:1fr 1fr 1fr; border-bottom:1px solid var(--border); }
+    .stat-cell { padding:16px; text-align:center; border-right:1px solid var(--border); }
+    .stat-cell:last-child { border-right:none; }
+    .stat-cell .stat-label { margin-bottom:4px; }
+    .stat-cell .stat-value { font-size:18px; }
+
+    .controls { padding:24px; display:flex; flex-direction:column; gap:16px; }
+    .btn-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    button { font-family:var(--font); border:none; border-radius:4px; cursor:pointer; font-size:12px; letter-spacing:3px; transition:all 0.2s; }
+    button:disabled { cursor:not-allowed; }
+
+    .btn-start { grid-column:span 2; padding:18px; background:var(--orange); color:#000; font-weight:bold; }
+    .btn-start:disabled { background:#111; color:var(--dimmer); }
+    .btn-pause { padding:16px; background:var(--bg3); color:var(--amber); border:1px solid var(--amber); }
+    .btn-pause:disabled { color:var(--dimmer); border-color:var(--bg3); background:#111; }
+    .btn-resume { padding:16px; background:var(--bg3); color:var(--blue); border:1px solid var(--blue); }
+    .btn-resume:disabled { color:var(--dimmer); border-color:var(--bg3); background:#111; }
+    .btn-stop { grid-column:span 2; padding:18px; background:var(--bg3); color:var(--red); border:1px solid var(--red); }
+    .btn-stop:disabled { color:var(--dimmer); border-color:var(--bg3); background:#111; }
+
+    .slider-card { background:var(--bg2); border-radius:4px; padding:16px; border:1px solid var(--border); }
+    .slider-header { display:flex; justify-content:space-between; margin-bottom:12px; }
+    .slider-current { font-size:14px; }
+    .slider-current .pace { font-size:10px; color:var(--dim); margin-left:6px; }
+    input[type=range] { width:100%; margin-bottom:10px; height:4px; border-radius:2px; outline:none; cursor:pointer; }
+    input[type=range].orange { accent-color:var(--orange); }
+    input[type=range].blue   { accent-color:var(--blue); }
+
+    .btn-set { width:100%; padding:10px; font-size:11px; letter-spacing:2px; }
+    .btn-set.orange { background:#ff880020; color:var(--orange); border:1px solid #ff880040; }
+    .btn-set.blue   { background:#0088ff20; color:var(--blue);   border:1px solid #0088ff40; }
+    .btn-set:hover:not(:disabled) { opacity:0.8; }
+    .btn-set:disabled { opacity:0.3; cursor:not-allowed; }
+
+    .error-bar { display:none; padding:8px 24px; background:#ff333310; border-bottom:1px solid #ff333340; font-size:10px; letter-spacing:2px; color:var(--red); }
+    .error-bar.show { display:block; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-title">Treadmill</div>
+    <nav class="nav">
+      <a href="/" class="active">MANUAL</a>
+      <a href="/workout">WORKOUT</a>
+      <a href="/build">BUILD</a>
+    </nav>
+    <button class="ble-btn disconnected" id="bleBtn" onclick="toggleConnect()">CONNECT</button>
+  </div>
+
+  <div class="error-bar" id="errorBar"></div>
+
+  <div class="mode-bar">
+    <div class="mode-indicator" id="modeIndicator" style="background:var(--dim)"></div>
+    <span class="mode-label" id="modeLabel" style="color:var(--dim)">IDLE</span>
+  </div>
+
+  <div class="speed-section">
+    <div class="ring-wrap">
+      <svg width="140" height="140" viewBox="0 0 140 140">
+        <circle cx="70" cy="70" r="54" fill="none" stroke="#1a1a1a" stroke-width="10"/>
+        <circle cx="70" cy="70" r="54" fill="none" stroke="#ff8800" stroke-width="10"
+          stroke-linecap="round" id="speedRing" stroke-dasharray="0 339.3"
+          style="transition:stroke-dasharray 0.5s ease;filter:drop-shadow(0 0 6px #ff8800)"/>
+      </svg>
+      <div class="ring-center">
+        <div class="ring-kph" id="dispKph">0.0</div>
+        <div class="ring-unit">KPH</div>
+      </div>
+    </div>
+    <div class="speed-stats">
+      <div>
+        <div class="stat-label">PACE</div>
+        <div class="stat-value" id="dispPace">--:--<span class="stat-unit">/km</span></div>
+      </div>
+      <div>
+        <div class="stat-label">INCLINE</div>
+        <div class="stat-value" id="dispIncline">0.0<span class="stat-unit">%</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-cell">
+      <div class="stat-label">DISTANCE</div>
+      <div class="stat-value" id="dispDist">0.00<span class="stat-unit">km</span></div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-label">TIME</div>
+      <div class="stat-value" id="dispTime">0:00</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-label">PULSE</div>
+      <div class="stat-value" id="dispPulse">--<span class="stat-unit">bpm</span></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="btn-grid">
+      <button class="btn-start" id="btnStart" onclick="cmdStart()" disabled>START</button>
+      <button class="btn-pause" id="btnPause" onclick="cmdPause()" disabled>PAUSE</button>
+      <button class="btn-resume" id="btnResume" onclick="cmdResume()" disabled>RESUME</button>
+      <button class="btn-stop" id="btnStop" onclick="cmdStop()" disabled>STOP</button>
+    </div>
+
+    <div class="slider-card">
+      <div class="slider-header">
+        <span class="stat-label">SPEED</span>
+        <span class="slider-current" style="color:var(--orange)">
+          <span id="speedVal">8.0</span> kph
+          <span class="pace" id="speedPace">7:30/km</span>
+        </span>
+      </div>
+      <input type="range" class="orange" id="speedSlider" min="2" max="18" step="0.5" value="8"
+        oninput="onSpeedSlide(this.value)">
+      <button class="btn-set orange" id="btnSetSpeed" onclick="cmdSetSpeed()" disabled>SET SPEED</button>
+    </div>
+
+    <div class="slider-card">
+      <div class="slider-header">
+        <span class="stat-label">INCLINE</span>
+        <span class="slider-current" style="color:var(--blue)">
+          <span id="inclineVal">0.0</span>%
+        </span>
+      </div>
+      <input type="range" class="blue" id="inclineSlider" min="0" max="10" step="0.5" value="0"
+        oninput="onInclineSlide(this.value)">
+      <button class="btn-set blue" id="btnSetIncline" onclick="cmdSetIncline()" disabled>SET INCLINE</button>
+    </div>
+  </div>
+
+<script>
+  const MODES = { 1:'IDLE', 2:'RUNNING', 3:'PAUSED', 4:'SUMMARY' };
+  const MODE_COLORS = { 1:'#555', 2:'#ff8800', 3:'#ffaa00', 4:'#0088ff' };
+  const CIRC = 2 * Math.PI * 54;
+
+  let bleState  = 'disconnected';
+  let treadmill = { mode:1, currentKph:0, currentIncline:0, currentDistance:0, currentTime:0, pulse:0 };
+
+  // ── WebSocket ─────────────────────────────────────────────
+  const ws = new WebSocket('ws://192.168.1.45/ws');
+  ws.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (d.type === 'ble_state') { bleState = d.bleState; updateBleBtn(); renderButtons(); }
+    if (d.type === 'status')    { bleState = d.bleState || bleState; treadmill = { ...treadmill, ...d }; render(); }
+    if (d.type === 'error')     { showError(d.message); }
+  };
+
+  // ── Connect ───────────────────────────────────────────────
+  function toggleConnect() {
+    if (bleState === 'connected')  { ws.send(JSON.stringify({ cmd:'disconnect' })); return; }
+    if (bleState === 'connecting') { return; }
+    ws.send(JSON.stringify({ cmd:'connect' }));
+  }
+  function updateBleBtn() {
+    const labels = { connected:'BLE ●', connecting:'CONNECTING...', disconnected:'CONNECT' };
+    setBleBtn(bleState, labels[bleState] || 'CONNECT');
+  }
+  function setBleBtn(cls, label) {
+    const b = document.getElementById('bleBtn');
+    b.className   = `ble-btn ${cls}`;
+    b.textContent = label;
+  }
+
+  // ── Commands ──────────────────────────────────────────────
+  function cmdStart() { const kph = parseFloat(document.getElementById('speedSlider').value); ws.send(JSON.stringify({ cmd:'start', value:kph })); }
+  function cmdPause() { ws.send(JSON.stringify({ cmd:'pause' })); }
+  function cmdResume(){ const kph = parseFloat(document.getElementById('speedSlider').value); ws.send(JSON.stringify({ cmd:'resume', value:kph })); }
+  function cmdStop()  { ws.send(JSON.stringify({ cmd:'stop' })); }
+  function cmdSetSpeed()   { const kph = parseFloat(document.getElementById('speedSlider').value); ws.send(JSON.stringify({ cmd:'speed', value:kph })); }
+  function cmdSetIncline() { ws.send(JSON.stringify({ cmd:'incline', value: parseFloat(document.getElementById('inclineSlider').value) })); }
+
+  // ── Sliders ───────────────────────────────────────────────
+  function onSpeedSlide(v)   { document.getElementById('speedVal').textContent = parseFloat(v).toFixed(1); document.getElementById('speedPace').textContent = formatPace(v)+'/km'; }
+  function onInclineSlide(v) { document.getElementById('inclineVal').textContent = parseFloat(v).toFixed(1); }
+
+  // ── Render ────────────────────────────────────────────────
+  function render() {
+    const s     = treadmill;
+    const color = MODE_COLORS[s.mode] || '#555';
+    document.getElementById('modeIndicator').style.background = color;
+    document.getElementById('modeIndicator').style.boxShadow  = `0 0 8px ${color}`;
+    document.getElementById('modeLabel').textContent = MODES[s.mode] || 'UNKNOWN';
+    document.getElementById('modeLabel').style.color = color;
+    const pct = Math.min(s.currentKph/20, 1);
+    document.getElementById('speedRing').setAttribute('stroke-dasharray', `${pct*CIRC} ${CIRC}`);
+    document.getElementById('dispKph').textContent  = s.currentKph.toFixed(1);
+    document.getElementById('dispPace').innerHTML   = formatPace(s.currentKph)+'<span class="stat-unit">/km</span>';
+    document.getElementById('dispIncline').innerHTML = s.currentIncline.toFixed(1)+'<span class="stat-unit">%</span>';
+    document.getElementById('dispDist').innerHTML    = (s.currentDistance/1000).toFixed(2)+'<span class="stat-unit">km</span>';
+    document.getElementById('dispTime').textContent  = formatTime(s.currentTime);
+    document.getElementById('dispPulse').innerHTML   = (s.pulse||'--')+'<span class="stat-unit">bpm</span>';
+    renderButtons();
+  }
+
+  function renderButtons() {
+    const isIdle    = treadmill.mode === 1;
+    const isRunning = treadmill.mode === 2;
+    const isPaused  = treadmill.mode === 3;
+    const ok        = bleState === 'connected';
+
+    document.getElementById('btnStart').disabled     = !ok || !isIdle;
+    document.getElementById('btnPause').disabled     = !ok || !isRunning;
+    document.getElementById('btnResume').disabled    = !ok || !isPaused;
+    document.getElementById('btnStop').disabled      = !ok || isIdle;
+    document.getElementById('btnSetSpeed').disabled  = !ok || !isRunning;
+    document.getElementById('btnSetIncline').disabled = !ok;
+  }
+
+  // ── Utilities ─────────────────────────────────────────────
+  function formatTime(s) {
+    const m = Math.floor(s/60);
+    return `${m}:${String(s%60).padStart(2,'0')}`;
+  }
+  function formatPace(kph) {
+    if (!kph || kph < 0.1) return '--:--';
+    const sec = Math.round(3600/kph);
+    return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
+  }
+
+  let errorTimer = null;
+  function showError(msg) {
+    const el = document.getElementById('errorBar');
+    el.textContent = msg;
+    el.classList.add('show');
+    if (errorTimer) clearTimeout(errorTimer);
+    errorTimer = setTimeout(() => el.classList.remove('show'), 4000);
+  }
+
+  render();
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# Saved workouts are local to each user
+workouts.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
