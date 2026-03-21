@@ -1,5 +1,7 @@
 ProForm Treadmill BLE Control
 
+![UI Screenshot](docs/UI.png)
+
 A lightweight Python web server that gives you full wireless control of a ProForm Carbon TL (and likely other iFit-compatible treadmills) from any browser on your network — no app, no subscription, no cloud.
 
 What It Does
