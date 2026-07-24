@@ -104,6 +104,24 @@
     .error-bar.show { display:block; }
 
     .not-connected-msg { padding:32px 24px; text-align:center; font-size:11px; color:var(--dim); letter-spacing:2px; }
+
+    /* The four state screens (not-connected / selector / belt-running /
+       active) each grow to fill leftover vertical space and centre their
+       own content within it, so extra room on a taller viewport doesn't
+       just pile up as blank space below the last card. */
+    #notConnectedMsg, #selectorSection, #beltRunningSection, #activeSection {
+      flex:1; display:flex; flex-direction:column; justify-content:center;
+    }
+
+    /* Wider layout for the 10.1" landscape touchscreen. */
+    @media (min-width: 700px) {
+      body { max-width: 760px; }
+      .header { padding-top: 40px; }
+      .ring-wrap { width:150px; height:150px; }
+      .ring-kph { font-size:30px; }
+      .live-grid .val { font-size:22px; }
+      button.btn-primary, .btn-pause, .btn-resume, .btn-danger { padding:22px 4px; font-size:13px; letter-spacing:2px; }
+    }
   </style>
 </head>
 <body>
@@ -128,7 +146,7 @@
 
   <div class="live-stats">
     <div class="ring-wrap">
-      <svg width="110" height="110" viewBox="0 0 110 110">
+      <svg width="100%" height="100%" viewBox="0 0 110 110">
         <circle cx="55" cy="55" r="42" fill="none" stroke="#1a1a1a" stroke-width="8"/>
         <circle cx="55" cy="55" r="42" fill="none" stroke="#ff8800" stroke-width="8"
           stroke-linecap="round" id="speedRing" stroke-dasharray="0 263.9"
@@ -353,7 +371,7 @@
     const active   = document.getElementById('activeSection');
 
     if (bleState !== 'connected') {
-      notConn.style.display  = 'block';
+      notConn.style.display  = 'flex';
       selector.style.display = 'none';
       beltRun.style.display  = 'none';
       active.style.display   = 'none';
@@ -364,17 +382,17 @@
     if (engineRunning) {
       selector.style.display = 'none';
       beltRun.style.display  = 'none';
-      active.style.display   = 'block';
+      active.style.display   = 'flex';
       return;
     }
 
     const isRunning = treadmill.mode === 2 || treadmill.mode === 3;
     if (isRunning) {
       selector.style.display = 'none';
-      beltRun.style.display  = 'block';
+      beltRun.style.display  = 'flex';
       active.style.display   = 'none';
     } else {
-      selector.style.display = 'block';
+      selector.style.display = 'flex';
       beltRun.style.display  = 'none';
       active.style.display   = 'none';
     }
@@ -441,7 +459,7 @@
   function finishWorkout() {
     engineRunning = false;
     document.getElementById('pausedBanner').classList.remove('show');
-    ws.send(JSON.stringify({ cmd:'stop' }));
+    ws.send(JSON.stringify({ cmd:'pause' }));
     updateSections();
   }
 

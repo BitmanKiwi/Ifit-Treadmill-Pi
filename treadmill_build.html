@@ -231,6 +231,18 @@
       text-align: center; padding: 24px;
       font-size: 11px; color: var(--dimmer); letter-spacing: 2px;
     }
+
+    /* Wider layout for the 10.1" landscape touchscreen, matching the
+       manual/workout screens, plus bigger touch targets on the add-step
+       and footer buttons. Left un-centered vertically (unlike the other
+       two screens) since this is a scrolling form/editor of variable
+       length, not a fixed status readout. */
+    @media (min-width: 700px) {
+      body { max-width: 760px; }
+      .header { padding-top: 40px; }
+      .add-btn { padding: 16px; font-size: 11px; }
+      button.btn-primary, button.btn-secondary, button.btn-danger { padding: 20px; font-size: 13px; }
+    }
   </style>
 </head>
 <body>

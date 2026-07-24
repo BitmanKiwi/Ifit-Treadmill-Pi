@@ -29,6 +29,11 @@ POLL_INTERVAL_FAST = 0.5
 POLL_INTERVAL_IDLE = 3.0
 WATCH_CHARS = ['CurrentKph', 'CurrentIncline', 'Mode', 'CurrentDistance', 'CurrentTime']
 
+# Resend the current speed as a BLE write every this many metres while running,
+# to stop the console/BLE link from timing out during long steady-state efforts
+# where no user commands are being sent.
+KEEPALIVE_DISTANCE_M = 1000.0
+
 WORKOUTS_FILE = Path(__file__).parent / 'workouts.json'
 STATIC_DIR    = Path(__file__).parent / 'static'
 
@@ -47,6 +52,8 @@ class Treadmill:
         self.state          = BleState.DISCONNECTED
         self.lock           = asyncio.Lock()
         self._cached_status = self._make_status(False, 1, 0.0, 0.0, 0, 0)
+        self._last_cmd_kph     = 2.0   # most recently commanded speed, resent for keepalive
+        self._keepalive_dist_m = 0.0   # distance (m) at which the last keepalive write was sent
 
     @property
     def is_connected(self):
@@ -101,6 +108,8 @@ class Treadmill:
             if kph > 2.0:
                 await asyncio.sleep(SETTLE_TIME)
                 await self.client.set_speed(kph)
+            self._last_cmd_kph     = kph
+            self._keepalive_dist_m = 0.0
 
     async def pause(self):
         async with self.lock:
@@ -112,6 +121,8 @@ class Treadmill:
             if kph > 2.0:
                 await asyncio.sleep(SETTLE_TIME)
                 await self.client.set_speed(kph)
+            self._last_cmd_kph     = kph
+            self._keepalive_dist_m = self._cached_status.get('currentDistance', 0.0)
 
     async def stop(self):
         async with self.lock:
@@ -120,12 +131,14 @@ class Treadmill:
             await self.client.write_characteristics({'Mode': 4})
             await asyncio.sleep(1)
             await self.client.write_characteristics({'Mode': 1})
+            self._keepalive_dist_m = 0.0
 
     async def set_speed(self, kph: float):
         kph = min(kph, 18.0)  # ProForm Carbon TL max speed
         print(f'set_speed: {kph}')
         async with self.lock:
             await self.client.set_speed(kph)
+            self._last_cmd_kph = kph
 
     async def set_incline(self, pct: float):
         pct = max(0.0, min(pct, 10.0))  # ProForm Carbon TL incline range
@@ -143,15 +156,28 @@ class Treadmill:
                 values    = await self.client.read_characteristics(WATCH_CHARS)
                 pulse_raw = values.get('Pulse', 0)
                 pulse     = pulse_raw.get('pulse', 0) if isinstance(pulse_raw, dict) else pulse_raw
+                mode      = values.get('Mode', 1)
+                distance  = values.get('CurrentDistance', 0)
                 self._cached_status = self._make_status(
                     True,
-                    values.get('Mode', 1),
+                    mode,
                     values.get('CurrentKph', 0.0),
                     values.get('CurrentIncline', 0.0),
-                    values.get('CurrentDistance', 0),
+                    distance,
                     values.get('CurrentTime', 0),
                     pulse,
                 )
+
+                # BLE keepalive — resend current speed as a write (not just a read)
+                # every KEEPALIVE_DISTANCE_M while running, so the console/BLE link
+                # doesn't idle-timeout during long steady-state efforts.
+                if mode == 2 and (distance - self._keepalive_dist_m) >= KEEPALIVE_DISTANCE_M:
+                    try:
+                        await self.client.set_speed(self._last_cmd_kph)
+                        self._keepalive_dist_m = distance
+                        print(f'BLE keepalive: resent {self._last_cmd_kph} kph at {distance}m')
+                    except Exception as e:
+                        print(f'BLE keepalive write failed: {e}')
             except Exception as e:
                 print(f'Status read error: {e}')
         return self._cached_status

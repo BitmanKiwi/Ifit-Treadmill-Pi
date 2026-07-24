@@ -46,24 +46,25 @@
     .stat-value { font-size:22px; letter-spacing:-0.5px; }
     .stat-unit { font-size:11px; color:var(--dim); margin-left:4px; }
 
-    .stats-grid { display:grid; grid-template-columns:1fr 1fr 1fr; border-bottom:1px solid var(--border); }
+    .stats-grid { display:grid; grid-template-columns:1fr 1fr; border-bottom:1px solid var(--border); }
     .stat-cell { padding:16px; text-align:center; border-right:1px solid var(--border); }
     .stat-cell:last-child { border-right:none; }
     .stat-cell .stat-label { margin-bottom:4px; }
     .stat-cell .stat-value { font-size:18px; }
+    #dispDist, #dispTime { font-size:32px; letter-spacing:-0.5px; }
 
-    .controls { padding:24px; display:flex; flex-direction:column; gap:16px; }
-    .btn-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-    button { font-family:var(--font); border:none; border-radius:4px; cursor:pointer; font-size:12px; letter-spacing:3px; transition:all 0.2s; }
+    .controls { padding:24px; display:flex; flex-direction:column; gap:16px; flex:1; justify-content:center; }
+    .btn-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; }
+    button { font-family:var(--font); border:none; border-radius:4px; cursor:pointer; font-size:11px; letter-spacing:1px; transition:all 0.2s; white-space:nowrap; }
     button:disabled { cursor:not-allowed; }
 
-    .btn-start { grid-column:span 2; padding:18px; background:var(--orange); color:#000; font-weight:bold; }
+    .btn-start { padding:16px 4px; background:var(--orange); color:#000; font-weight:bold; }
     .btn-start:disabled { background:#111; color:var(--dimmer); }
-    .btn-pause { padding:16px; background:var(--bg3); color:var(--amber); border:1px solid var(--amber); }
+    .btn-pause { padding:16px 4px; background:var(--bg3); color:var(--amber); border:1px solid var(--amber); }
     .btn-pause:disabled { color:var(--dimmer); border-color:var(--bg3); background:#111; }
-    .btn-resume { padding:16px; background:var(--bg3); color:var(--blue); border:1px solid var(--blue); }
+    .btn-resume { padding:16px 4px; background:var(--bg3); color:var(--blue); border:1px solid var(--blue); }
     .btn-resume:disabled { color:var(--dimmer); border-color:var(--bg3); background:#111; }
-    .btn-stop { grid-column:span 2; padding:18px; background:var(--bg3); color:var(--red); border:1px solid var(--red); }
+    .btn-stop { padding:16px 4px; background:var(--bg3); color:var(--red); border:1px solid var(--red); }
     .btn-stop:disabled { color:var(--dimmer); border-color:var(--bg3); background:#111; }
 
     .slider-card { background:var(--bg2); border-radius:4px; padding:16px; border:1px solid var(--border); }
@@ -82,6 +83,19 @@
 
     .error-bar { display:none; padding:8px 24px; background:#ff333310; border-bottom:1px solid #ff333340; font-size:10px; letter-spacing:2px; color:var(--red); }
     .error-bar.show { display:block; }
+
+    /* Wider layout for the 10.1" landscape touchscreen — avoids the whole
+       UI being squeezed into a narrow phone-width column with dead space
+       either side. */
+    @media (min-width: 700px) {
+      body { max-width: 760px; }
+      .header { padding-top: 40px; }
+      .ring-wrap { width:170px; height:170px; }
+      .ring-kph { font-size:34px; }
+      .stat-value { font-size:26px; }
+      #dispDist, #dispTime { font-size:40px; }
+      .btn-start, .btn-pause, .btn-resume, .btn-stop { padding:22px 4px; font-size:13px; letter-spacing:2px; }
+    }
   </style>
 </head>
 <body>
@@ -105,7 +119,7 @@
 
   <div class="speed-section">
     <div class="ring-wrap">
-      <svg width="140" height="140" viewBox="0 0 140 140">
+      <svg width="100%" height="100%" viewBox="0 0 140 140">
         <circle cx="70" cy="70" r="54" fill="none" stroke="#1a1a1a" stroke-width="10"/>
         <circle cx="70" cy="70" r="54" fill="none" stroke="#ff8800" stroke-width="10"
           stroke-linecap="round" id="speedRing" stroke-dasharray="0 339.3"
@@ -137,10 +151,6 @@
       <div class="stat-label">TIME</div>
       <div class="stat-value" id="dispTime">0:00</div>
     </div>
-    <div class="stat-cell">
-      <div class="stat-label">PULSE</div>
-      <div class="stat-value" id="dispPulse">--<span class="stat-unit">bpm</span></div>
-    </div>
   </div>
 
   <div class="controls">
@@ -153,15 +163,15 @@
 
     <div class="slider-card">
       <div class="slider-header">
-        <span class="stat-label">SPEED</span>
+        <span class="stat-label">PACE</span>
         <span class="slider-current" style="color:var(--orange)">
-          <span id="speedVal">8.0</span> kph
-          <span class="pace" id="speedPace">7:30/km</span>
+          <span id="speedPace">7:30</span>/km
+          <span class="pace" id="speedVal">8.0 kph</span>
         </span>
       </div>
       <input type="range" class="orange" id="speedSlider" min="2" max="18" step="0.5" value="8"
         oninput="onSpeedSlide(this.value)">
-      <button class="btn-set orange" id="btnSetSpeed" onclick="cmdSetSpeed()" disabled>SET SPEED</button>
+      <button class="btn-set orange" id="btnSetSpeed" onclick="cmdSetSpeed()" disabled>SET PACE</button>
     </div>
 
     <div class="slider-card">
@@ -219,7 +229,7 @@
   function cmdSetIncline() { ws.send(JSON.stringify({ cmd:'incline', value: parseFloat(document.getElementById('inclineSlider').value) })); }
 
   // ── Sliders ───────────────────────────────────────────────
-  function onSpeedSlide(v)   { document.getElementById('speedVal').textContent = parseFloat(v).toFixed(1); document.getElementById('speedPace').textContent = formatPace(v)+'/km'; }
+  function onSpeedSlide(v)   { document.getElementById('speedPace').textContent = formatPace(v); document.getElementById('speedVal').textContent = parseFloat(v).toFixed(1)+' kph'; }
   function onInclineSlide(v) { document.getElementById('inclineVal').textContent = parseFloat(v).toFixed(1); }
 
   // ── Render ────────────────────────────────────────────────
@@ -237,7 +247,6 @@
     document.getElementById('dispIncline').innerHTML = s.currentIncline.toFixed(1)+'<span class="stat-unit">%</span>';
     document.getElementById('dispDist').innerHTML    = (s.currentDistance/1000).toFixed(2)+'<span class="stat-unit">km</span>';
     document.getElementById('dispTime').textContent  = formatTime(s.currentTime);
-    document.getElementById('dispPulse').innerHTML   = (s.pulse||'--')+'<span class="stat-unit">bpm</span>';
     renderButtons();
   }
 
