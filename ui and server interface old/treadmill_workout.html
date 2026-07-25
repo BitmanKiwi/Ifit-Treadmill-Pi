@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Treadmill — Workout</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#0a0a0a; --bg2:#0f0f0f; --bg3:#1a1a1a; --border:#1a1a1a;
+      --orange:#ff8800; --blue:#0088ff; --amber:#ffaa00; --red:#ff3333;
+      --green:#00cc66; --dim:#444; --dimmer:#333; --font:'DM Mono',monospace;
+    }
+    body { background:var(--bg); color:#fff; font-family:var(--font); min-height:100vh; display:flex; flex-direction:column; max-width:480px; margin:0 auto; }
+
+    .header { padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+    .header-title { font-size:11px; letter-spacing:4px; color:var(--dim); }
+    .nav { display:flex; gap:16px; }
+    .nav a { font-size:11px; letter-spacing:2px; text-decoration:none; color:var(--dim); }
+    .nav a.active { color:var(--orange); }
+    .ble-btn { font-family:var(--font); font-size:10px; letter-spacing:2px; padding:6px 12px; border-radius:4px; cursor:pointer; border:1px solid; transition:all 0.2s; }
+    .ble-btn.disconnected { color:var(--dim); border-color:var(--dim); background:none; }
+    .ble-btn.disconnected:hover { color:#fff; border-color:#fff; }
+    .ble-btn.connecting { color:var(--amber); border-color:var(--amber); background:none; cursor:wait; }
+    .ble-btn.connected { color:var(--orange); border-color:var(--orange); background:#ff880010; }
+
+    .mode-bar { padding:8px 24px; background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
+    .mode-indicator { width:8px; height:8px; border-radius:50%; transition:background 0.3s,box-shadow 0.3s; background:var(--dim); }
+    .mode-label { font-size:11px; letter-spacing:3px; color:var(--dim); }
+
+    .paused-banner { display:none; padding:10px 24px; background:#ffaa0010; border-bottom:1px solid #ffaa0040; font-size:10px; letter-spacing:3px; color:var(--amber); text-align:center; }
+    .paused-banner.show { display:block; }
+
+    .live-stats { padding:20px 24px; display:flex; align-items:center; justify-content:center; gap:32px; border-bottom:1px solid var(--border); }
+    .ring-wrap { position:relative; width:110px; height:110px; flex-shrink:0; }
+    .ring-wrap svg { transform:rotate(-90deg); }
+    .ring-center { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; }
+    .ring-kph { font-size:22px; font-weight:500; letter-spacing:-1px; line-height:1; }
+    .ring-unit { font-size:9px; color:var(--dim); letter-spacing:2px; margin-top:2px; }
+    .live-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px 24px; flex:1; }
+    .lbl { font-size:9px; color:var(--dim); letter-spacing:2px; margin-bottom:2px; }
+    .val { font-size:16px; letter-spacing:-0.5px; }
+    .unit { font-size:10px; color:var(--dim); margin-left:3px; }
+
+    .section { padding:20px 24px; border-bottom:1px solid var(--border); }
+    .section-title { font-size:9px; letter-spacing:3px; color:var(--dim); margin-bottom:14px; }
+
+    .workout-list { display:flex; flex-direction:column; gap:8px; }
+    .workout-card { background:var(--bg2); border:1px solid var(--border); border-radius:4px; padding:14px 16px; cursor:pointer; transition:border-color 0.2s; display:flex; justify-content:space-between; align-items:center; }
+    .workout-card:hover { border-color:var(--dim); }
+    .workout-card.selected { border-color:var(--orange); }
+    .wname { font-size:13px; letter-spacing:1px; }
+    .wdesc { font-size:10px; color:var(--dim); margin-top:3px; }
+    .wmeta { font-size:10px; color:var(--dim); text-align:right; flex-shrink:0; }
+    .saved-tag { font-size:9px; color:var(--blue); letter-spacing:1px; margin-top:2px; }
+
+    .overview-steps { display:flex; flex-direction:column; gap:6px; margin-bottom:4px; }
+    .overview-step { display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--bg2); border-radius:4px; border-left:3px solid var(--border); font-size:11px; }
+    .overview-step.warmup   { border-left-color:var(--amber); }
+    .overview-step.hard     { border-left-color:var(--orange); }
+    .overview-step.recovery { border-left-color:var(--green); }
+    .overview-step.cooldown { border-left-color:var(--blue); }
+    .overview-step.steady   { border-left-color:var(--orange); }
+    .overview-step.repeat-header { border-left-color:var(--dim); color:var(--dim); font-size:10px; letter-spacing:2px; }
+    .ost { min-width:80px; letter-spacing:1px; }
+    .ostr { color:var(--dim); font-size:10px; flex:1; }
+    .ospc { color:var(--orange); }
+
+    .progress-track { height:2px; background:var(--bg3); border-radius:1px; margin-bottom:20px; overflow:hidden; }
+    .progress-fill { height:100%; background:var(--orange); box-shadow:0 0 6px var(--orange); transition:width 0.5s ease; }
+    .step-card { background:var(--bg2); border-radius:4px; border:1px solid var(--border); padding:18px; margin-bottom:12px; }
+    .step-card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; }
+    .step-type-badge { font-size:10px; letter-spacing:3px; padding:4px 8px; border-radius:2px; font-weight:500; }
+    .badge-warmup   { background:#ffaa0020; color:var(--amber);  border:1px solid #ffaa0040; }
+    .badge-hard     { background:#ff880020; color:var(--orange); border:1px solid #ff880040; }
+    .badge-recovery { background:#00cc6620; color:var(--green);  border:1px solid #00cc6640; }
+    .badge-cooldown { background:#0088ff20; color:var(--blue);   border:1px solid #0088ff40; }
+    .badge-steady   { background:#ff880020; color:var(--orange); border:1px solid #ff880040; }
+    .repeat-badge { font-size:10px; color:var(--dim); letter-spacing:1px; }
+    .step-target { display:flex; gap:24px; margin-bottom:14px; }
+    .step-target-item .lbl { font-size:9px; }
+    .step-target-item .val { font-size:20px; letter-spacing:-0.5px; }
+    .step-progress-track { height:4px; background:var(--bg3); border-radius:2px; overflow:hidden; }
+    .step-progress-fill { height:100%; border-radius:2px; transition:width 0.5s ease; }
+    .next-step { display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--bg2); border-radius:4px; border:1px solid var(--border); margin-bottom:16px; }
+    .next-label { font-size:9px; color:var(--dim); letter-spacing:2px; min-width:40px; }
+    .next-type { font-size:11px; letter-spacing:1px; }
+    .next-detail { font-size:10px; color:var(--dim); margin-left:auto; }
+    .workout-name { font-size:11px; letter-spacing:3px; color:var(--dim); margin-bottom:6px; }
+    .workout-progress-line { display:flex; justify-content:space-between; font-size:10px; color:var(--dim); margin-bottom:12px; }
+
+    .btn-row { display:flex; gap:10px; }
+    button { font-family:var(--font); border:none; border-radius:4px; cursor:pointer; font-size:12px; letter-spacing:3px; transition:all 0.2s; }
+    button:disabled { cursor:not-allowed; opacity:0.3; }
+    .btn-primary { flex:1; padding:18px; background:var(--orange); color:#000; font-weight:bold; }
+    .btn-primary:disabled { background:#111; color:var(--dimmer); opacity:1; }
+    .btn-pause  { flex:1; padding:16px; background:var(--bg3); color:var(--amber); border:1px solid var(--amber); }
+    .btn-resume { flex:1; padding:16px; background:var(--bg3); color:var(--blue);  border:1px solid var(--blue); }
+    .btn-danger { flex:1; padding:18px; background:var(--bg3); color:var(--red);   border:1px solid var(--red); }
+    .controls-section { padding:20px 24px; display:flex; flex-direction:column; gap:12px; }
+
+    .error-bar { display:none; padding:8px 24px; background:#ff333310; border-bottom:1px solid #ff333340; font-size:10px; letter-spacing:2px; color:var(--red); }
+    .error-bar.show { display:block; }
+
+    .not-connected-msg { padding:32px 24px; text-align:center; font-size:11px; color:var(--dim); letter-spacing:2px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-title">Treadmill</div>
+    <nav class="nav">
+      <a href="/">MANUAL</a>
+      <a href="/workout" class="active">WORKOUT</a>
+      <a href="/build">BUILD</a>
+    </nav>
+    <button class="ble-btn disconnected" id="bleBtn" onclick="toggleConnect()">CONNECT</button>
+  </div>
+
+  <div class="error-bar" id="errorBar"></div>
+  <div class="paused-banner" id="pausedBanner">WORKOUT PAUSED</div>
+
+  <div class="mode-bar">
+    <div class="mode-indicator" id="modeIndicator"></div>
+    <span class="mode-label" id="modeLabel">IDLE</span>
+  </div>
+
+  <div class="live-stats">
+    <div class="ring-wrap">
+      <svg width="110" height="110" viewBox="0 0 110 110">
+        <circle cx="55" cy="55" r="42" fill="none" stroke="#1a1a1a" stroke-width="8"/>
+        <circle cx="55" cy="55" r="42" fill="none" stroke="#ff8800" stroke-width="8"
+          stroke-linecap="round" id="speedRing" stroke-dasharray="0 263.9"
+          style="transition:stroke-dasharray 0.5s ease;filter:drop-shadow(0 0 5px #ff8800)"/>
+      </svg>
+      <div class="ring-center">
+        <div class="ring-kph" id="dispKph">0.0</div>
+        <div class="ring-unit">KPH</div>
+      </div>
+    </div>
+    <div class="live-grid">
+      <div><div class="lbl">PACE</div><div class="val" id="dispPace">--:--<span class="unit">/km</span></div></div>
+      <div><div class="lbl">DISTANCE</div><div class="val" id="dispDist">0.00<span class="unit">km</span></div></div>
+      <div><div class="lbl">TIME</div><div class="val" id="dispTime">0:00</div></div>
+      <div><div class="lbl">INCLINE</div><div class="val" id="dispIncline">0.0<span class="unit">%</span></div></div>
+    </div>
+  </div>
+
+  <!-- NOT CONNECTED -->
+  <div id="notConnectedMsg" class="not-connected-msg">
+    CONNECT VIA BLE BUTTON ABOVE
+  </div>
+
+  <!-- SELECTOR -->
+  <div id="selectorSection" style="display:none">
+    <div class="section">
+      <div class="section-title">SELECT WORKOUT</div>
+      <div class="workout-list" id="workoutList"></div>
+    </div>
+    <div class="section" id="overviewSection" style="display:none">
+      <div class="section-title">WORKOUT STEPS</div>
+      <div class="overview-steps" id="overviewSteps"></div>
+    </div>
+    <div class="controls-section">
+      <div class="btn-row">
+        <button class="btn-primary" id="btnLoad" onclick="loadWorkout()" disabled>START WORKOUT</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BELT RUNNING, NO WORKOUT -->
+  <div id="beltRunningSection" style="display:none">
+    <div class="section">
+      <div class="section-title">BELT RUNNING</div>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:16px">Belt is active. Stop it to select a workout.</div>
+    </div>
+    <div class="controls-section">
+      <div class="btn-row">
+        <button class="btn-danger" onclick="cmdStopBelt()">STOP BELT</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTIVE WORKOUT -->
+  <div id="activeSection" style="display:none">
+    <div class="section" style="display:block">
+      <div class="workout-name" id="activeWorkoutName"></div>
+      <div class="workout-progress-line">
+        <span id="stepCounter">Step 1 of 1</span>
+        <span id="overallPct">0%</span>
+      </div>
+      <div class="progress-track"><div class="progress-fill" id="overallBar" style="width:0%"></div></div>
+      <div class="step-card">
+        <div class="step-card-header">
+          <span class="step-type-badge" id="stepBadge">WARMUP</span>
+          <span class="repeat-badge" id="repeatBadge"></span>
+        </div>
+        <div class="step-target">
+          <div class="step-target-item">
+            <div class="lbl">TARGET PACE</div>
+            <div class="val" id="stepPace">--:--<span class="unit">/km</span></div>
+          </div>
+          <div class="step-target-item">
+            <div class="lbl" id="stepTriggerLabel">REMAINING</div>
+            <div class="val" id="stepRemaining">--</div>
+          </div>
+        </div>
+        <div class="step-progress-track"><div class="step-progress-fill" id="stepBar" style="width:0%"></div></div>
+      </div>
+      <div class="next-step" id="nextStepRow">
+        <span class="next-label">NEXT</span>
+        <span class="next-type" id="nextType">--</span>
+        <span class="next-detail" id="nextDetail"></span>
+      </div>
+    </div>
+    <div class="controls-section">
+      <div class="btn-row" id="activeButtons">
+        <button class="btn-pause" onclick="cmdPause()">PAUSE</button>
+        <button class="btn-danger" onclick="cmdStopWorkout()">STOP</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // ── BUILTINS ──────────────────────────────────────────────
+  const BUILTIN = [
+    { id:'easy_30', name:'Easy 30', description:'Steady easy run', steps:[
+      { type:'warmup',   trigger:'time', duration:300,  pace:'5:30', incline:0 },
+      { type:'steady',   trigger:'time', duration:1500, pace:'5:00', incline:0 },
+      { type:'cooldown', trigger:'time', duration:300,  pace:'5:30', incline:0 },
+    ]},
+    { id:'5x1km', name:'5×1km Intervals', description:'VO2 max session', steps:[
+      { type:'warmup', trigger:'time', duration:900, pace:'5:00', incline:0 },
+      { type:'repeat', count:5, steps:[
+        { type:'hard',     trigger:'distance', distance:1000, pace:'3:55', incline:0 },
+        { type:'recovery', trigger:'time',     duration:120,  pace:'5:30', incline:0 },
+      ]},
+      { type:'cooldown', trigger:'time', duration:600, pace:'5:30', incline:0 },
+    ]},
+    { id:'8x200', name:'8×200m Short Reps', description:'Speed session', steps:[
+      { type:'warmup', trigger:'time', duration:900, pace:'4:45', incline:0 },
+      { type:'repeat', count:8, steps:[
+        { type:'hard',     trigger:'distance', distance:200, pace:'3:45', incline:0 },
+        { type:'recovery', trigger:'distance', distance:200, pace:'5:30', incline:0 },
+      ]},
+      { type:'cooldown', trigger:'time', duration:600, pace:'5:00', incline:0 },
+    ]},
+    { id:'hill', name:'Hill Reps', description:'Incline strength', steps:[
+      { type:'warmup', trigger:'time', duration:600, pace:'5:30', incline:0 },
+      { type:'repeat', count:6, steps:[
+        { type:'hard',     trigger:'time', duration:120, pace:'4:30', incline:6 },
+        { type:'recovery', trigger:'time', duration:90,  pace:'5:30', incline:1 },
+      ]},
+      { type:'cooldown', trigger:'time', duration:600, pace:'5:30', incline:0 },
+    ]},
+  ];
+
+  // ── UTILITIES ─────────────────────────────────────────────
+  function flattenSteps(steps) {
+    const flat = [];
+    steps.forEach(s => {
+      if (s.type === 'repeat') {
+        for (let i = 0; i < s.count; i++)
+          s.steps.forEach(sub => flat.push({ ...sub, repeatIndex:i+1, repeatTotal:s.count }));
+      } else flat.push(s);
+    });
+    return flat;
+  }
+  function paceToKph(pace) {
+    const [m,s] = pace.split(':').map(Number);
+    return Math.round(3600/(m*60+s)*10)/10;
+  }
+  function formatTime(s) {
+    s = Math.max(0, Math.floor(s));
+    return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+  }
+  function formatPace(kph) {
+    if (!kph || kph < 0.1) return '--:--';
+    const sec = Math.round(3600/kph);
+    return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
+  }
+  function stepColor(type) {
+    return { warmup:'#ffaa00', hard:'#ff8800', recovery:'#00cc66', cooldown:'#0088ff', steady:'#ff8800' }[type] || '#444';
+  }
+  function stepDuration(step) {
+    if (step.trigger === 'time') return formatTime(step.duration);
+    return step.distance >= 1000 ? (step.distance/1000).toFixed(1)+'km' : step.distance+'m';
+  }
+  function getSaved() {
+    try { return JSON.parse(localStorage.getItem('treadmill_workouts') || '[]'); } catch { return []; }
+  }
+
+  // ── STATE ─────────────────────────────────────────────────
+  const MODES = { 1:'IDLE', 2:'RUNNING', 3:'PAUSED', 4:'SUMMARY' };
+  const MODE_COLORS = { 1:'#555', 2:'#ff8800', 3:'#ffaa00', 4:'#0088ff' };
+  const CIRC = 2 * Math.PI * 42;
+
+  let bleState        = 'disconnected';
+  let treadmill       = { mode:1, currentKph:0, currentIncline:0, currentDistance:0, currentTime:0 };
+  let allWorkouts     = [];
+  let selectedWorkout = null;
+  let flatSteps       = [];
+  let currentStepIdx  = 0;
+  let engineRunning   = false;
+  let advancing       = false;  // guard against double-advance on rapid ticks
+  let stepStartTime   = 0;
+  let stepStartDist   = 0;
+  let totalPaused     = 0;
+  let pauseStart      = 0;
+
+  // ── WEBSOCKET ─────────────────────────────────────────────
+  const ws = new WebSocket('ws://192.168.1.45/ws');
+  ws.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (d.type === 'ble_state') {
+      bleState = d.bleState;
+      updateBleBtn();
+      updateSections();
+    }
+    if (d.type === 'status') {
+      bleState = d.bleState || bleState;
+      treadmill = { ...treadmill, ...d };
+      renderLive();
+      updateBleBtn();
+      updateSections();
+      if (engineRunning) tickEngine();
+    }
+    if (d.type === 'error') showError(d.message);
+  };
+
+  // ── BLE CONNECT ───────────────────────────────────────────
+  function toggleConnect() {
+    if (bleState === 'connected')  { ws.send(JSON.stringify({ cmd:'disconnect' })); return; }
+    if (bleState === 'connecting') { return; }
+    ws.send(JSON.stringify({ cmd:'connect' }));
+  }
+  function updateBleBtn() {
+    const labels = { connected:'BLE ●', connecting:'CONNECTING...', disconnected:'CONNECT' };
+    setBleBtn(bleState, labels[bleState] || 'CONNECT');
+  }
+  function setBleBtn(cls, label) {
+    const b = document.getElementById('bleBtn');
+    b.className   = `ble-btn ${cls}`;
+    b.textContent = label;
+  }
+
+  // ── SECTION MANAGER ───────────────────────────────────────
+  function updateSections() {
+    const notConn  = document.getElementById('notConnectedMsg');
+    const selector = document.getElementById('selectorSection');
+    const beltRun  = document.getElementById('beltRunningSection');
+    const active   = document.getElementById('activeSection');
+
+    if (bleState !== 'connected') {
+      notConn.style.display  = 'block';
+      selector.style.display = 'none';
+      beltRun.style.display  = 'none';
+      active.style.display   = 'none';
+      return;
+    }
+    notConn.style.display = 'none';
+
+    if (engineRunning) {
+      selector.style.display = 'none';
+      beltRun.style.display  = 'none';
+      active.style.display   = 'block';
+      return;
+    }
+
+    const isRunning = treadmill.mode === 2 || treadmill.mode === 3;
+    if (isRunning) {
+      selector.style.display = 'none';
+      beltRun.style.display  = 'block';
+      active.style.display   = 'none';
+    } else {
+      selector.style.display = 'block';
+      beltRun.style.display  = 'none';
+      active.style.display   = 'none';
+    }
+  }
+
+  // ── ENGINE ────────────────────────────────────────────────
+  function tickEngine() {
+    if (currentStepIdx >= flatSteps.length) { finishWorkout(); return; }
+    const step = flatSteps[currentStepIdx];
+
+    if (treadmill.mode === 3 && !pauseStart) {
+      pauseStart = Date.now()/1000;
+      document.getElementById('pausedBanner').classList.add('show');
+      updateActiveButtons(true);
+      renderActiveStep(); return;
+    }
+    if (treadmill.mode === 3) { renderActiveStep(); return; }
+    if (treadmill.mode === 2 && pauseStart) {
+      totalPaused += Date.now()/1000 - pauseStart;
+      pauseStart = 0;
+      // Console resumed at 2kph — push target speed back
+      const step = flatSteps[currentStepIdx];
+      ws.send(JSON.stringify({ cmd:'speed', value: paceToKph(step.pace) }));
+      document.getElementById('pausedBanner').classList.remove('show');
+      updateActiveButtons(false);
+    }
+    if (treadmill.mode === 1) { engineRunning = false; updateSections(); return; }
+
+    let elapsed, remaining, progress;
+    if (step.trigger === 'time') {
+      elapsed   = (Date.now()/1000 - stepStartTime) - totalPaused;
+      remaining = Math.max(0, step.duration - elapsed);
+      progress  = Math.min(1, elapsed/step.duration);
+      if (elapsed >= step.duration && !advancing) { advancing = true; advanceStep(); return; }
+    } else {
+      elapsed   = treadmill.currentDistance - stepStartDist;
+      remaining = Math.max(0, step.distance - elapsed);
+      progress  = Math.min(1, elapsed/step.distance);
+      if (elapsed >= step.distance && !advancing) { advancing = true; advanceStep(); return; }
+    }
+    renderActiveStep(remaining, progress);
+  }
+
+  function advanceStep() {
+    currentStepIdx++;
+    if (currentStepIdx >= flatSteps.length) { finishWorkout(); return; }
+    startStep();
+  }
+
+  function startStep() {
+    const step = flatSteps[currentStepIdx];
+    stepStartTime = Date.now()/1000;
+    stepStartDist = treadmill.currentDistance;
+    totalPaused   = 0;
+    pauseStart    = 0;
+    advancing     = false;
+    const kph = paceToKph(step.pace);
+    const inc = step.incline || 0;
+    ws.send(JSON.stringify({ cmd:'speed',   value: kph }));
+    ws.send(JSON.stringify({ cmd:'incline', value: inc }));
+    renderActiveStep();
+  }
+
+  function finishWorkout() {
+    engineRunning = false;
+    document.getElementById('pausedBanner').classList.remove('show');
+    ws.send(JSON.stringify({ cmd:'stop' }));
+    updateSections();
+  }
+
+  // ── COMMANDS ──────────────────────────────────────────────
+  function cmdPause()   { ws.send(JSON.stringify({ cmd:'pause' })); }
+  function cmdResume()  {
+    const step = flatSteps[currentStepIdx];
+    ws.send(JSON.stringify({ cmd:'resume', value: paceToKph(step.pace) }));
+  }
+  function cmdStopWorkout() {
+    engineRunning = false;
+    pauseStart    = 0;
+    document.getElementById('pausedBanner').classList.remove('show');
+    ws.send(JSON.stringify({ cmd:'stop' }));
+    updateSections();
+  }
+  function cmdStopBelt() { ws.send(JSON.stringify({ cmd:'stop' })); }
+
+  function loadWorkout() {
+    if (!selectedWorkout) return;
+    flatSteps      = flattenSteps(selectedWorkout.steps);
+    currentStepIdx = 0;
+    engineRunning  = true;
+    totalPaused    = 0;
+    pauseStart     = 0;
+    advancing      = false;
+    document.getElementById('activeWorkoutName').textContent = selectedWorkout.name.toUpperCase();
+    // Start belt at 2kph only — startStep will ramp to target pace after settle
+    ws.send(JSON.stringify({ cmd:'start', value: 2.0 }));
+    stepStartTime  = Date.now()/1000 + 999999; // prevent tickEngine firing until startStep sets it properly
+    updateSections();
+    setTimeout(startStep, 3200);
+  }
+
+  function updateActiveButtons(paused) {
+    document.getElementById('activeButtons').innerHTML = paused
+      ? `<button class="btn-resume" onclick="cmdResume()">RESUME</button>
+         <button class="btn-danger" onclick="cmdStopWorkout()">STOP</button>`
+      : `<button class="btn-pause" onclick="cmdPause()">PAUSE</button>
+         <button class="btn-danger" onclick="cmdStopWorkout()">STOP</button>`;
+  }
+
+  // ── DISPLAY SPEED (interpolated) ─────────────────────────
+  // When a speed command fires we know the target — animate toward it
+  // at ~0.8kph/s (typical treadmill ramp rate) so the ring feels live
+  // ── RENDER LIVE ───────────────────────────────────────────
+  function renderLive() {
+    const s = treadmill;
+    const color = MODE_COLORS[s.mode] || '#555';
+    document.getElementById('modeIndicator').style.background = color;
+    document.getElementById('modeIndicator').style.boxShadow  = `0 0 8px ${color}`;
+    document.getElementById('modeLabel').textContent = MODES[s.mode] || 'UNKNOWN';
+    document.getElementById('modeLabel').style.color = color;
+    const pct = Math.min(s.currentKph / 20, 1);
+    document.getElementById('speedRing').setAttribute('stroke-dasharray', `${pct*CIRC} ${CIRC}`);
+    document.getElementById('dispKph').textContent = s.currentKph.toFixed(1);
+    document.getElementById('dispPace').innerHTML  = formatPace(s.currentKph) + '<span class="unit">/km</span>';
+    document.getElementById('dispDist').innerHTML    = (s.currentDistance/1000).toFixed(2) + '<span class="unit">km</span>';
+    document.getElementById('dispTime').textContent  = formatTime(s.currentTime);
+    document.getElementById('dispIncline').innerHTML = s.currentIncline.toFixed(1) + '<span class="unit">%</span>';
+  }
+
+  // ── RENDER ACTIVE STEP ────────────────────────────────────
+  function renderActiveStep(remaining, progress) {
+    if (currentStepIdx >= flatSteps.length) return;
+    const step  = flatSteps[currentStepIdx];
+    const total = flatSteps.length;
+    const color = stepColor(step.type);
+
+    const pct = Math.round((currentStepIdx/total)*100);
+    document.getElementById('stepCounter').textContent = `Step ${currentStepIdx+1} of ${total}`;
+    document.getElementById('overallPct').textContent  = pct + '%';
+    document.getElementById('overallBar').style.width  = pct + '%';
+
+    const badge = document.getElementById('stepBadge');
+    badge.textContent = step.type.toUpperCase();
+    badge.className   = `step-type-badge badge-${step.type}`;
+    document.getElementById('repeatBadge').textContent =
+      step.repeatIndex ? `${step.repeatIndex} / ${step.repeatTotal}` : '';
+    document.getElementById('stepPace').innerHTML =
+      step.pace + '<span class="unit">/km</span>';
+
+    if (remaining !== undefined) {
+      document.getElementById('stepTriggerLabel').textContent = 'REMAINING';
+      document.getElementById('stepRemaining').textContent =
+        step.trigger === 'time' ? formatTime(remaining)
+          : (remaining >= 1000 ? (remaining/1000).toFixed(2)+'km' : Math.round(remaining)+'m');
+    }
+
+    const bar = document.getElementById('stepBar');
+    bar.style.width      = ((progress||0)*100) + '%';
+    bar.style.background = color;
+    bar.style.boxShadow  = `0 0 4px ${color}`;
+
+    const next = flatSteps[currentStepIdx+1];
+    if (next) {
+      document.getElementById('nextType').textContent   = next.type.toUpperCase();
+      document.getElementById('nextType').style.color   = stepColor(next.type);
+      document.getElementById('nextDetail').textContent = next.pace+'/km · '+stepDuration(next);
+      document.getElementById('nextStepRow').style.display = 'flex';
+    } else {
+      document.getElementById('nextStepRow').style.display = 'none';
+    }
+  }
+
+  // ── WORKOUT LIST ──────────────────────────────────────────
+  function buildWorkoutList() {
+    const saved = getSaved();
+    const builtinFiltered = BUILTIN.filter(b => !saved.find(s => s.id === b.id));
+    allWorkouts = [...builtinFiltered, ...saved];
+
+    const list = document.getElementById('workoutList');
+    list.innerHTML = '';
+    allWorkouts.forEach(w => {
+      const flat = flattenSteps(w.steps);
+      const totalSecs = flat.reduce((a,s) =>
+        a + (s.trigger==='time' ? s.duration : s.distance/(paceToKph(s.pace)/3.6)), 0);
+      const isSaved = !!saved.find(s => s.id === w.id);
+
+      const card = document.createElement('div');
+      card.className = 'workout-card';
+      card.dataset.id = w.id;
+      card.innerHTML = `
+        <div>
+          <div class="wname">${w.name}</div>
+          <div class="wdesc">${w.description || ''}</div>
+          ${isSaved ? '<div class="saved-tag">SAVED</div>' : ''}
+        </div>
+        <div class="wmeta">~${Math.round(totalSecs/60)} min<br>${flat.length} steps</div>`;
+      card.onclick = () => selectWorkout(w.id);
+      list.appendChild(card);
+    });
+  }
+
+  function selectWorkout(id) {
+    selectedWorkout = allWorkouts.find(w => w.id === id);
+    document.querySelectorAll('.workout-card').forEach(c =>
+      c.classList.toggle('selected', c.dataset.id === id));
+    document.getElementById('btnLoad').disabled = false;
+    showOverview(selectedWorkout);
+  }
+
+  function showOverview(workout) {
+    document.getElementById('overviewSection').style.display = 'block';
+    const container = document.getElementById('overviewSteps');
+    container.innerHTML = '';
+    workout.steps.forEach(step => {
+      if (step.type === 'repeat') {
+        const h = document.createElement('div');
+        h.className = 'overview-step repeat-header';
+        h.textContent = `${step.count}× REPEAT`;
+        container.appendChild(h);
+        step.steps.forEach(sub => appendOverviewStep(container, sub, true));
+      } else {
+        appendOverviewStep(container, step, false);
+      }
+    });
+  }
+
+  function appendOverviewStep(container, step, indent) {
+    const el = document.createElement('div');
+    el.className = `overview-step ${step.type}`;
+    if (indent) el.style.marginLeft = '16px';
+    el.innerHTML = `
+      <span class="ost" style="color:${stepColor(step.type)}">${step.type.toUpperCase()}</span>
+      <span class="ostr">${stepDuration(step)}</span>
+      <span class="ospc">${step.pace}/km</span>
+      ${step.incline ? `<span style="color:var(--blue);font-size:10px">${step.incline}%</span>` : ''}`;
+    container.appendChild(el);
+  }
+
+  let errorTimer = null;
+  function showError(msg) {
+    const el = document.getElementById('errorBar');
+    el.textContent = msg;
+    el.classList.add('show');
+    if (errorTimer) clearTimeout(errorTimer);
+    errorTimer = setTimeout(() => el.classList.remove('show'), 4000);
+  }
+
+  // ── INIT ──────────────────────────────────────────────────
+  // Load saved workouts from Pi
+  fetch('/api/workouts')
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.length) {
+        const local = getSaved();
+        data.forEach(w => { if (!local.find(e => e.id === w.id)) local.push(w); });
+        localStorage.setItem('treadmill_workouts', JSON.stringify(local));
+      }
+    })
+    .catch(() => {})
+    .finally(() => buildWorkoutList());
+
+  renderLive();
+  updateSections();
+</script>
+</body>
+</html>
