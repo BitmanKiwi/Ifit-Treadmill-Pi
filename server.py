@@ -81,6 +81,7 @@ class Treadmill:
                 raise RuntimeError('Service discovery timeout')
             self.state = BleState.CONNECTED
             await broadcast_ble_state()
+            ensure_poll()
         except Exception as e:
             print(f'BLE connect failed: {e}')
             self.client = None
@@ -242,14 +243,14 @@ async def broadcast_ble_state():
 # POLL LOOP
 # ============================================================
 async def poll_loop():
+    # Runs off BLE connection state, not client presence — this is what keeps
+    # the keepalive (inside get_status()) firing even when no browser is
+    # currently connected, e.g. a phone/PC session that went to sleep.
     global poll_task
-    while clients:
-        if treadmill.is_connected:
-            status   = await treadmill.get_status()
-            await broadcast(status)
-            interval = POLL_INTERVAL_FAST if status.get('mode', 1) in (2, 3) else POLL_INTERVAL_IDLE
-        else:
-            interval = POLL_INTERVAL_IDLE
+    while treadmill.is_connected:
+        status   = await treadmill.get_status()
+        await broadcast(status)  # no-ops harmlessly if clients is empty
+        interval = POLL_INTERVAL_FAST if status.get('mode', 1) in (2, 3) else POLL_INTERVAL_IDLE
         await asyncio.sleep(interval)
     poll_task = None
 
