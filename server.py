@@ -150,8 +150,8 @@ class Treadmill:
         self.client         = None
         self.state          = BleState.DISCONNECTED
         self.lock           = asyncio.Lock()
-        self._cached_status = self._make_status(False, 1, 0.0, 0.0, 0, 0)
         self.register       = WorkoutRegister()
+        self._cached_status = self._make_status(False, 1, 0.0, 0.0, 0, 0)
 
     @property
     def is_connected(self):
