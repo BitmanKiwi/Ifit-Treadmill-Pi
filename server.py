@@ -89,6 +89,10 @@ class WorkoutRegister:
         self.events         = []     # this workout's transitions, most recent last
         self._last_mode     = MODE_IDLE
         self._last_distance = None
+        self.held_distance  = None   # last known-good distance/time for display —
+        self.held_time      = None   # holds steady rather than showing a spurious drop
+        self._explicit_stop = False  # set by Treadmill.stop() so its transient Mode 3→4→1
+                                      # dance isn't misread as a paused-timeout end
 
     def to_dict(self) -> dict:
         return {
@@ -106,34 +110,49 @@ class WorkoutRegister:
         return entry
 
     # ── Called on every successful live status read ─────────────
+    # Returns (display_distance, display_time) — the raw values, unless the
+    # workout is active and the device reported a spurious drop (seen while
+    # paused on this console), in which case the last good values hold steady.
     def on_mode(self, mode: int, distance, time_):
-        # Flag (don't silently trust) a device counter that's gone backwards —
-        # would mean the console reset its own counters underneath us.
-        if self.active and self._last_distance is not None and distance is not None \
-                and distance < self._last_distance - 1.0:
+        is_drop = (self.active and self._last_distance is not None and distance is not None
+                   and distance < self._last_distance - 1.0)
+        if is_drop:
             self._log('distance_reset_detected', distance, time_, previousDistance=self._last_distance)
 
         prev = self._last_mode
         if mode == MODE_RUNNING and prev != MODE_RUNNING:
             if not self.active:
                 self.active, self.paused, self.end_reason = True, False, None
+                self.held_distance, self.held_time = distance, time_
                 self._log('start', distance, time_)
             elif self.paused:
                 self.paused = False
                 self._log('resume', distance, time_)
 
         elif mode == MODE_PAUSED and prev != MODE_PAUSED:
-            if self.active:
+            if self.active and not self._explicit_stop:
                 self.paused = True
                 self._log('pause', distance, time_)
 
         elif mode in (MODE_IDLE, MODE_SUMMARY) and self.active and prev in (MODE_RUNNING, MODE_PAUSED):
-            self.end_reason = 'auto_timeout' if prev == MODE_PAUSED else 'stop'
+            if self._explicit_stop:
+                self.end_reason = 'stop'
+            else:
+                self.end_reason = 'auto_timeout' if prev == MODE_PAUSED else 'stop'
+            self._explicit_stop = False
             self._log('end', distance, time_, reason=self.end_reason)
             self.active, self.paused = False, False
+            self.held_distance, self.held_time = None, None
 
         self._last_mode     = mode
         self._last_distance = distance if distance is not None else self._last_distance
+
+        if self.active and not is_drop and distance is not None:
+            self.held_distance, self.held_time = distance, time_
+
+        if self.active:
+            return self.held_distance, self.held_time
+        return distance, time_
 
     # ── Called from Treadmill.connect()/disconnect() ────────────
     def on_ble_disconnect(self):
@@ -143,6 +162,11 @@ class WorkoutRegister:
     def on_ble_reconnect(self, distance, time_):
         if self.active:
             self._log('ble_reconnect', distance, time_)
+
+    # ── Called from Treadmill.stop() before it starts writing Mode ──
+    def mark_explicit_stop(self):
+        if self.active:
+            self._explicit_stop = True
 
 
 class Treadmill:
@@ -227,6 +251,7 @@ class Treadmill:
                 await self.client.set_speed(kph)
 
     async def stop(self):
+        self.register.mark_explicit_stop()
         async with self.lock:
             await self.client.write_characteristics({'Mode': 3})
             await asyncio.sleep(1)
@@ -259,7 +284,7 @@ class Treadmill:
                 mode      = values.get('Mode', 1)
                 distance  = values.get('CurrentDistance', 0)
                 time_     = values.get('CurrentTime', 0)
-                self.register.on_mode(mode, distance, time_)
+                distance, time_ = self.register.on_mode(mode, distance, time_)
                 self._cached_status = self._make_status(
                     True,
                     mode,
