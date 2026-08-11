@@ -9,6 +9,7 @@ Treadmill Control Server
 import asyncio
 import json
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 import uvicorn
@@ -29,13 +30,15 @@ POLL_INTERVAL_FAST = 0.5
 POLL_INTERVAL_IDLE = 3.0
 WATCH_CHARS = ['CurrentKph', 'CurrentIncline', 'Mode', 'CurrentDistance', 'CurrentTime']
 
-# Resend the current speed as a BLE write every this many metres while running,
-# to stop the console/BLE link from timing out during long steady-state efforts
-# where no user commands are being sent.
-KEEPALIVE_DISTANCE_M = 1000.0
+WORKOUTS_FILE      = Path(__file__).parent / 'workouts.json'
+REGISTER_LOG_FILE  = Path(__file__).parent / 'register_log.jsonl'
+STATIC_DIR         = Path(__file__).parent / 'static'
 
-WORKOUTS_FILE = Path(__file__).parent / 'workouts.json'
-STATIC_DIR    = Path(__file__).parent / 'static'
+# Mode values reported by the console over BLE.
+MODE_IDLE    = 1
+MODE_RUNNING = 2
+MODE_PAUSED  = 3
+MODE_SUMMARY = 4
 
 # ============================================================
 # BLE STATE
@@ -46,14 +49,109 @@ class BleState:
     CONNECTED    = 'connected'
 
 
+# ============================================================
+# WORKOUT REGISTER
+# ============================================================
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+def _append_register_log(entry: dict):
+    try:
+        with REGISTER_LOG_FILE.open('a') as f:
+            f.write(json.dumps(entry) + '\n')
+    except Exception as e:
+        print(f'Register log write failed: {e}')
+
+
+class WorkoutRegister:
+    """
+    Tracks workout state independently of any single BLE status read, so a
+    dropped/reconnected link or a pause doesn't just silently lose ground.
+
+    The console's own CurrentDistance/CurrentTime are still the source of
+    truth while we have a live read — this class does NOT re-derive
+    distance/time itself. Its job is:
+      1. Turn raw `Mode` transitions into a clean started/paused/resumed/
+         ended state machine, distinguishing an explicit stop from a
+         console auto-timeout out of a pause.
+      2. Log every transition (and every BLE disconnect/reconnect that
+         happens mid-workout) with a wall-clock timestamp and a device
+         distance/time snapshot, to disk, so nothing has to be
+         reconstructed after the fact from a watch file.
+      3. Flag it loudly (rather than silently trusting it) if the device's
+         own distance ever goes backwards, which would mean the console
+         reset its counters underneath us.
+    """
+    def __init__(self):
+        self.active         = False
+        self.paused         = False
+        self.end_reason     = None   # 'stop' | 'auto_timeout' | None
+        self.events         = []     # this workout's transitions, most recent last
+        self._last_mode     = MODE_IDLE
+        self._last_distance = None
+
+    def to_dict(self) -> dict:
+        return {
+            'active'    : self.active,
+            'paused'    : self.paused,
+            'endReason' : self.end_reason,
+            'eventCount': len(self.events),
+        }
+
+    def _log(self, event_type: str, distance, time_, **extra):
+        entry = {'type': event_type, 'ts': _now_iso(), 'deviceDistance': distance, 'deviceTime': time_, **extra}
+        self.events.append(entry)
+        _append_register_log(entry)
+        print(f'Register: {event_type} @ dist={distance} time={time_} {extra or ""}')
+        return entry
+
+    # ── Called on every successful live status read ─────────────
+    def on_mode(self, mode: int, distance, time_):
+        # Flag (don't silently trust) a device counter that's gone backwards —
+        # would mean the console reset its own counters underneath us.
+        if self.active and self._last_distance is not None and distance is not None \
+                and distance < self._last_distance - 1.0:
+            self._log('distance_reset_detected', distance, time_, previousDistance=self._last_distance)
+
+        prev = self._last_mode
+        if mode == MODE_RUNNING and prev != MODE_RUNNING:
+            if not self.active:
+                self.active, self.paused, self.end_reason = True, False, None
+                self._log('start', distance, time_)
+            elif self.paused:
+                self.paused = False
+                self._log('resume', distance, time_)
+
+        elif mode == MODE_PAUSED and prev != MODE_PAUSED:
+            if self.active:
+                self.paused = True
+                self._log('pause', distance, time_)
+
+        elif mode in (MODE_IDLE, MODE_SUMMARY) and self.active and prev in (MODE_RUNNING, MODE_PAUSED):
+            self.end_reason = 'auto_timeout' if prev == MODE_PAUSED else 'stop'
+            self._log('end', distance, time_, reason=self.end_reason)
+            self.active, self.paused = False, False
+
+        self._last_mode     = mode
+        self._last_distance = distance if distance is not None else self._last_distance
+
+    # ── Called from Treadmill.connect()/disconnect() ────────────
+    def on_ble_disconnect(self):
+        if self.active:
+            self._log('ble_disconnect', self._last_distance, None)
+
+    def on_ble_reconnect(self, distance, time_):
+        if self.active:
+            self._log('ble_reconnect', distance, time_)
+
+
 class Treadmill:
     def __init__(self):
         self.client         = None
         self.state          = BleState.DISCONNECTED
         self.lock           = asyncio.Lock()
         self._cached_status = self._make_status(False, 1, 0.0, 0.0, 0, 0)
-        self._last_cmd_kph     = 2.0   # most recently commanded speed, resent for keepalive
-        self._keepalive_dist_m = 0.0   # distance (m) at which the last keepalive write was sent
+        self.register       = WorkoutRegister()
 
     @property
     def is_connected(self):
@@ -82,6 +180,12 @@ class Treadmill:
             self.state = BleState.CONNECTED
             await broadcast_ble_state()
             ensure_poll()
+            if self.register.active:
+                try:
+                    values = await self.client.read_characteristics(['CurrentDistance', 'CurrentTime'])
+                    self.register.on_ble_reconnect(values.get('CurrentDistance'), values.get('CurrentTime'))
+                except Exception:
+                    self.register.on_ble_reconnect(None, None)
         except Exception as e:
             print(f'BLE connect failed: {e}')
             self.client = None
@@ -93,6 +197,7 @@ class Treadmill:
         if self.state == BleState.DISCONNECTED:
             return
         self.state = BleState.DISCONNECTED
+        self.register.on_ble_disconnect()
         try:
             if self.client:
                 await self.client.disconnect()
@@ -109,8 +214,6 @@ class Treadmill:
             if kph > 2.0:
                 await asyncio.sleep(SETTLE_TIME)
                 await self.client.set_speed(kph)
-            self._last_cmd_kph     = kph
-            self._keepalive_dist_m = 0.0
 
     async def pause(self):
         async with self.lock:
@@ -122,8 +225,6 @@ class Treadmill:
             if kph > 2.0:
                 await asyncio.sleep(SETTLE_TIME)
                 await self.client.set_speed(kph)
-            self._last_cmd_kph     = kph
-            self._keepalive_dist_m = self._cached_status.get('currentDistance', 0.0)
 
     async def stop(self):
         async with self.lock:
@@ -132,14 +233,12 @@ class Treadmill:
             await self.client.write_characteristics({'Mode': 4})
             await asyncio.sleep(1)
             await self.client.write_characteristics({'Mode': 1})
-            self._keepalive_dist_m = 0.0
 
     async def set_speed(self, kph: float):
         kph = min(kph, 18.0)  # ProForm Carbon TL max speed
         print(f'set_speed: {kph}')
         async with self.lock:
             await self.client.set_speed(kph)
-            self._last_cmd_kph = kph
 
     async def set_incline(self, pct: float):
         pct = max(0.0, min(pct, 10.0))  # ProForm Carbon TL incline range
@@ -159,26 +258,17 @@ class Treadmill:
                 pulse     = pulse_raw.get('pulse', 0) if isinstance(pulse_raw, dict) else pulse_raw
                 mode      = values.get('Mode', 1)
                 distance  = values.get('CurrentDistance', 0)
+                time_     = values.get('CurrentTime', 0)
+                self.register.on_mode(mode, distance, time_)
                 self._cached_status = self._make_status(
                     True,
                     mode,
                     values.get('CurrentKph', 0.0),
                     values.get('CurrentIncline', 0.0),
                     distance,
-                    values.get('CurrentTime', 0),
+                    time_,
                     pulse,
                 )
-
-                # BLE keepalive — resend current speed as a write (not just a read)
-                # every KEEPALIVE_DISTANCE_M while running, so the console/BLE link
-                # doesn't idle-timeout during long steady-state efforts.
-                if mode == 2 and (distance - self._keepalive_dist_m) >= KEEPALIVE_DISTANCE_M:
-                    try:
-                        await self.client.set_speed(self._last_cmd_kph)
-                        self._keepalive_dist_m = distance
-                        print(f'BLE keepalive: resent {self._last_cmd_kph} kph at {distance}m')
-                    except Exception as e:
-                        print(f'BLE keepalive write failed: {e}')
             except Exception as e:
                 print(f'Status read error: {e}')
         return self._cached_status
@@ -194,6 +284,7 @@ class Treadmill:
             'currentDistance': distance,
             'currentTime'    : time,
             'pulse'          : pulse,
+            'register'       : self.register.to_dict(),
         }
 
 
@@ -244,8 +335,8 @@ async def broadcast_ble_state():
 # ============================================================
 async def poll_loop():
     # Runs off BLE connection state, not client presence — this is what keeps
-    # the keepalive (inside get_status()) firing even when no browser is
-    # currently connected, e.g. a phone/PC session that went to sleep.
+    # status polling going even when no browser is currently connected,
+    # e.g. a phone/PC session that went to sleep.
     global poll_task
     while treadmill.is_connected:
         status   = await treadmill.get_status()
@@ -291,6 +382,10 @@ async def workout_page():
 @app.get('/build')
 async def build_page():
     return FileResponse(STATIC_DIR / 'treadmill_build.html')
+
+@app.get('/monitor')
+async def monitor_page():
+    return FileResponse(STATIC_DIR / 'treadmill_monitor.html')
 
 @app.get('/api/workouts')
 async def get_workouts():
