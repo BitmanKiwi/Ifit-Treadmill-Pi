@@ -743,6 +743,7 @@
 
   function newWorkout() {
     workout = { name:'', description:'', steps:[] };
+    localStorage.setItem('treadmill_draft', JSON.stringify(workout));
     document.getElementById('workoutName').value = '';
     document.getElementById('workoutDesc').value = '';
     renderSteps();
