@@ -65,22 +65,28 @@ def _append_register_log(entry: dict):
 
 class WorkoutRegister:
     """
-    Tracks workout state independently of any single BLE status read, so a
-    dropped/reconnected link or a pause doesn't just silently lose ground.
+    Tracks distance/time as a ratcheting register, independent of any single
+    BLE status read, so a skipped poll, a momentary zero/garbage read, a
+    paused workout, or a dropped/reconnected BLE link never makes the
+    displayed numbers sag or flicker.
 
-    The console's own CurrentDistance/CurrentTime are still the source of
-    truth while we have a live read — this class does NOT re-derive
-    distance/time itself. Its job is:
-      1. Turn raw `Mode` transitions into a clean started/paused/resumed/
-         ended state machine, distinguishing an explicit stop from a
-         console auto-timeout out of a pause.
-      2. Log every transition (and every BLE disconnect/reconnect that
-         happens mid-workout) with a wall-clock timestamp and a device
-         distance/time snapshot, to disk, so nothing has to be
-         reconstructed after the fact from a watch file.
-      3. Flag it loudly (rather than silently trusting it) if the device's
-         own distance ever goes backwards, which would mean the console
-         reset its counters underneath us.
+    Register update rule, applied on every live status read:
+      - a device reading greater than the register's current value moves
+        the register up to match it.
+      - a reading of zero, or one that isn't greater than the register, is
+        ignored outright — this is what makes the register hold steady
+        through a paused workout (which can report an empty/zero read), a
+        BLE disconnect, or a poll skipped because a command holds the lock.
+      - the register is zeroed only when the treadmill's own Mode reports
+        IDLE, i.e. genuinely stopped — never just because a read came back
+        empty, and never while merely paused.
+
+    Separately, this class turns raw `Mode` transitions into a clean
+    started/paused/resumed/ended state machine (self.active / self.paused),
+    distinguishing an explicit stop from a console auto-timeout out of a
+    pause, and logs every transition — plus every BLE disconnect/reconnect
+    that happens mid-workout — with a wall-clock timestamp to disk, so
+    nothing has to be reconstructed after the fact from a watch file.
     """
     def __init__(self):
         self.active         = False
@@ -88,9 +94,8 @@ class WorkoutRegister:
         self.end_reason     = None   # 'stop' | 'auto_timeout' | None
         self.events         = []     # this workout's transitions, most recent last
         self._last_mode     = MODE_IDLE
-        self._last_distance = None
-        self.held_distance  = None   # last known-good distance/time for display —
-        self.held_time      = None   # holds steady rather than showing a spurious drop
+        self.reg_distance   = 0.0    # ratcheting register — see class docstring
+        self.reg_time       = 0
         self._explicit_stop = False  # set by Treadmill.stop() so its transient Mode 3→4→1
                                       # dance isn't misread as a paused-timeout end
 
@@ -103,27 +108,26 @@ class WorkoutRegister:
         }
 
     def _log(self, event_type: str, distance, time_, **extra):
-        entry = {'type': event_type, 'ts': _now_iso(), 'deviceDistance': distance, 'deviceTime': time_, **extra}
+        entry = {
+            'type': event_type, 'ts': _now_iso(),
+            'deviceDistance': distance, 'deviceTime': time_,
+            'regDistance': self.reg_distance, 'regTime': self.reg_time,
+            **extra,
+        }
         self.events.append(entry)
         _append_register_log(entry)
-        print(f'Register: {event_type} @ dist={distance} time={time_} {extra or ""}')
+        print(f'Register: {event_type} @ dist={distance} time={time_} reg=({self.reg_distance},{self.reg_time}) {extra or ""}')
         return entry
 
     # ── Called on every successful live status read ─────────────
-    # Returns (display_distance, display_time) — the raw values, unless the
-    # workout is active and the device reported a spurious drop (seen while
-    # paused on this console), in which case the last good values hold steady.
+    # Returns (reg_distance, reg_time) — the ratcheting register, per the
+    # update rule described in the class docstring.
     def on_mode(self, mode: int, distance, time_):
-        is_drop = (self.active and self._last_distance is not None and distance is not None
-                   and distance < self._last_distance - 1.0)
-        if is_drop:
-            self._log('distance_reset_detected', distance, time_, previousDistance=self._last_distance)
-
         prev = self._last_mode
+
         if mode == MODE_RUNNING and prev != MODE_RUNNING:
             if not self.active:
                 self.active, self.paused, self.end_reason = True, False, None
-                self.held_distance, self.held_time = distance, time_
                 self._log('start', distance, time_)
             elif self.paused:
                 self.paused = False
@@ -142,22 +146,24 @@ class WorkoutRegister:
             self._explicit_stop = False
             self._log('end', distance, time_, reason=self.end_reason)
             self.active, self.paused = False, False
-            self.held_distance, self.held_time = None, None
 
-        self._last_mode     = mode
-        self._last_distance = distance if distance is not None else self._last_distance
+        # ── Register: ratchet up on a genuine forward reading, ignore
+        # zero/non-increasing reads, zero out only once truly IDLE. ──
+        if mode == MODE_IDLE:
+            self.reg_distance, self.reg_time = 0.0, 0
+        else:
+            if distance is not None and distance != 0 and distance > self.reg_distance:
+                self.reg_distance = distance
+            if time_ is not None and time_ != 0 and time_ > self.reg_time:
+                self.reg_time = time_
 
-        if self.active and not is_drop and distance is not None:
-            self.held_distance, self.held_time = distance, time_
-
-        if self.active:
-            return self.held_distance, self.held_time
-        return distance, time_
+        self._last_mode = mode
+        return self.reg_distance, self.reg_time
 
     # ── Called from Treadmill.connect()/disconnect() ────────────
     def on_ble_disconnect(self):
         if self.active:
-            self._log('ble_disconnect', self._last_distance, None)
+            self._log('ble_disconnect', self.reg_distance, self.reg_time)
 
     def on_ble_reconnect(self, distance, time_):
         if self.active:
