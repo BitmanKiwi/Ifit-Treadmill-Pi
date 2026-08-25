@@ -5,23 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Treadmill — Build</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="/static/common.css" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg:      #0a0a0a;
-      --bg2:     #0f0f0f;
-      --bg3:     #1a1a1a;
-      --border:  #1a1a1a;
-      --orange:  #ff8800;
-      --blue:    #0088ff;
-      --amber:   #ffaa00;
-      --red:     #ff3333;
-      --green:   #00cc66;
-      --dim:     #444;
-      --dimmer:  #333;
-      --font:    'DM Mono', monospace;
-    }
 
     body {
       background: var(--bg); color: #fff;
@@ -31,16 +17,9 @@
       max-width: 480px; margin: 0 auto;
     }
 
-    /* ── HEADER ── */
-    .header {
-      padding: 16px 24px; border-bottom: 1px solid var(--border);
-      display: flex; justify-content: space-between; align-items: center;
-      position: sticky; top: 0; background: var(--bg); z-index: 10;
-    }
-    .header-title { font-size: 11px; letter-spacing: 4px; color: var(--dim); }
-    .nav { display: flex; gap: 16px; }
-    .nav a { font-size: 11px; letter-spacing: 2px; text-decoration: none; color: var(--dim); }
-    .nav a.active { color: var(--orange); }
+    /* ── HEADER — base look shared via common.css; sticky positioning
+       is specific to this page (long scrolling step list below it) ── */
+    .header { position: sticky; top: 0; background: var(--bg); z-index: 10; }
 
     /* ── SECTIONS ── */
     .section { padding: 20px 24px; border-bottom: 1px solid var(--border); }
@@ -238,16 +217,9 @@
        two screens) since this is a scrolling form/editor of variable
        length, not a fixed status readout. */
     @media (min-width: 700px) {
-      body { max-width: 760px; }
-      .header { padding: 28px 40px; }
-      .header-title { font-size:22px; letter-spacing:5px; }
-      .nav { gap:28px; }
-      .nav a { font-size:22px; letter-spacing:2px; }
-      .section-title { font-size:14px; letter-spacing:4px; }
-      .field label { font-size:12px; }
-      .field input, .field textarea, .field select { font-size:15px; padding:12px 14px; }
-      .add-btn { padding: 16px; font-size: 13px; }
-      button.btn-primary, button.btn-secondary, button.btn-danger { padding: 20px; font-size: 15px; }
+      body { max-width: 1000px; }
+      .add-btn { padding: 16px; font-size: 11px; }
+      button.btn-primary, button.btn-secondary, button.btn-danger { padding: 20px; font-size: 13px; }
     }
   </style>
 </head>

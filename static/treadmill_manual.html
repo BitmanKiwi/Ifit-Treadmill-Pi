@@ -5,31 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Treadmill — Manual</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="/static/common.css" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg: #0a0a0a; --bg2: #0f0f0f; --bg3: #1a1a1a;
-      --border: #1a1a1a; --orange: #ff8800; --blue: #0088ff;
-      --amber: #ffaa00; --red: #ff3333; --green: #00cc66;
-      --dim: #444; --dimmer: #333; --font: 'DM Mono', monospace;
-    }
     body { background:var(--bg); color:#fff; font-family:var(--font); min-height:100vh; display:flex; flex-direction:column; max-width:480px; margin:0 auto; }
-
-    .header { padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
-    .header-title { font-size:11px; letter-spacing:4px; color:var(--dim); }
-    .nav { display:flex; gap:16px; }
-    .nav a { font-size:11px; letter-spacing:2px; text-decoration:none; color:var(--dim); }
-    .nav a.active { color:var(--orange); }
-
-    .ble-btn {
-      font-family:var(--font); font-size:10px; letter-spacing:2px;
-      padding:6px 12px; border-radius:4px; cursor:pointer; border:1px solid;
-      transition:all 0.2s;
-    }
-    .ble-btn.disconnected { color:var(--dim); border-color:var(--dim); background:none; }
-    .ble-btn.disconnected:hover { color:#fff; border-color:#fff; }
-    .ble-btn.connecting { color:var(--amber); border-color:var(--amber); background:none; cursor:wait; }
-    .ble-btn.connected { color:var(--orange); border-color:var(--orange); background:#ff880010; }
 
     .mode-bar { padding:8px 24px; background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
     .mode-indicator { width:8px; height:8px; border-radius:50%; transition:background 0.3s,box-shadow 0.3s; }
@@ -87,20 +66,18 @@
     /* Wider layout for the 10.1" landscape touchscreen — avoids the whole
        UI being squeezed into a narrow phone-width column with dead space
        either side, and scales every element up for glancing at while
-       actually running, not just reading at arm's length. */
+       actually running, not just reading at arm's length.
+       max-width bumped from 980px to 1360px to actually fill a 1280px-wide
+       kiosk display — adjust to match your panel's actual resolution if
+       it differs. */
     @media (min-width: 700px) {
-      body { max-width: 980px; }
-      .header { padding: 28px 40px; }
-      .header-title { font-size:22px; letter-spacing:5px; }
-      .nav { gap:28px; }
-      .nav a { font-size:22px; letter-spacing:2px; }
-      .ble-btn { font-size:18px; padding:14px 26px; }
+      body { max-width: 1360px; }
 
-      .mode-bar { padding:18px 40px; gap:20px; }
+      .mode-bar { padding:18px 44px; gap:20px; }
       .mode-indicator { width:18px; height:18px; }
       .mode-label { font-size:26px; letter-spacing:4px; }
 
-      .speed-section { padding:48px 40px 36px; gap:64px; }
+      .speed-section { padding:48px 44px 36px; gap:64px; }
       .ring-wrap { width:300px; height:300px; }
       .ring-kph { font-size:78px; }
       .ring-unit { font-size:18px; letter-spacing:3px; }
@@ -113,7 +90,7 @@
       .stat-cell .stat-value { font-size:42px; }
       #dispDist, #dispTime { font-size:104px; }
 
-      .controls { padding:36px 40px; gap:24px; }
+      .controls { padding:36px 44px; gap:24px; }
       .btn-grid { gap:14px; }
       button { font-size:19px; letter-spacing:2px; }
       .btn-start, .btn-pause, .btn-resume, .btn-stop { padding:34px 4px; }
@@ -124,7 +101,7 @@
       input[type=range] { height:10px; margin-bottom:16px; }
       .btn-set { padding:18px; font-size:19px; letter-spacing:3px; }
 
-      .error-bar { padding:14px 40px; font-size:17px; }
+      .error-bar { padding:14px 44px; font-size:17px; }
     }
   </style>
 </head>

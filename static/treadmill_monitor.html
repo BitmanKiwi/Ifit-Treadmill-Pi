@@ -5,14 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Treadmill — Monitor</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <!-- common.css supplies the shared color variables only — this page's
+       topbar/grid layout is intentionally its own fluid vw-based design,
+       not the fixed-breakpoint .header/.nav used by the other pages. -->
+  <link href="/static/common.css" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg: #0a0a0a; --bg2: #0f0f0f; --bg3: #1a1a1a;
-      --border: #1a1a1a; --orange: #ff8800; --blue: #0088ff;
-      --amber: #ffaa00; --red: #ff3333; --green: #00cc66;
-      --dim: #444; --dimmer: #333; --font: 'DM Mono', monospace;
-    }
     html, body { height:100%; }
     body {
       background:var(--bg); color:#fff; font-family:var(--font);
@@ -21,19 +19,19 @@
 
     .topbar {
       display:flex; justify-content:space-between; align-items:center;
-      padding: 2vh 3vw; flex: 0 0 auto;
+      padding: 2.4vh 3vw; flex: 0 0 auto;
     }
-    .title { font-size: 2vw; letter-spacing: 0.4vw; color: var(--dim); min-width: 1px; }
-    .nav { display:flex; gap:1.5vw; }
-    .nav a { font-size: 1.4vw; letter-spacing: 0.2vw; text-decoration:none; color:var(--dim); }
+    .title { font-size: 2.6vw; letter-spacing: 0.4vw; color: var(--dim); min-width: 1px; }
+    .nav { display:flex; gap:2.4vw; }
+    .nav a { font-size: 2.1vw; letter-spacing: 0.2vw; text-decoration:none; color:var(--dim); }
     .nav a.active { color: var(--orange); }
     .status-cluster { display:flex; align-items:center; gap:1.5vw; }
     .mode-pill {
-      font-size: 1.6vw; letter-spacing: 0.3vw; padding: 0.6vh 1.2vw;
+      font-size: 1.9vw; letter-spacing: 0.3vw; padding: 0.9vh 1.4vw;
       border-radius: 3vw; border: 1px solid var(--dim); color: var(--dim);
     }
     .reg-note {
-      font-size: 1.3vw; letter-spacing: 0.15vw; color: var(--amber);
+      font-size: 1.5vw; letter-spacing: 0.15vw; color: var(--amber);
       opacity: 0; transition: opacity 0.3s;
     }
     .reg-note.show { opacity: 1; }

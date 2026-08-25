@@ -5,25 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Treadmill — Workout</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="/static/common.css" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg:#0a0a0a; --bg2:#0f0f0f; --bg3:#1a1a1a; --border:#1a1a1a;
-      --orange:#ff8800; --blue:#0088ff; --amber:#ffaa00; --red:#ff3333;
-      --green:#00cc66; --dim:#444; --dimmer:#333; --font:'DM Mono',monospace;
-    }
     body { background:var(--bg); color:#fff; font-family:var(--font); min-height:100vh; display:flex; flex-direction:column; max-width:480px; margin:0 auto; }
-
-    .header { padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
-    .header-title { font-size:11px; letter-spacing:4px; color:var(--dim); }
-    .nav { display:flex; gap:16px; }
-    .nav a { font-size:11px; letter-spacing:2px; text-decoration:none; color:var(--dim); }
-    .nav a.active { color:var(--orange); }
-    .ble-btn { font-family:var(--font); font-size:10px; letter-spacing:2px; padding:6px 12px; border-radius:4px; cursor:pointer; border:1px solid; transition:all 0.2s; }
-    .ble-btn.disconnected { color:var(--dim); border-color:var(--dim); background:none; }
-    .ble-btn.disconnected:hover { color:#fff; border-color:#fff; }
-    .ble-btn.connecting { color:var(--amber); border-color:var(--amber); background:none; cursor:wait; }
-    .ble-btn.connected { color:var(--orange); border-color:var(--orange); background:#ff880010; }
 
     .mode-bar { padding:8px 24px; background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
     .mode-indicator { width:8px; height:8px; border-radius:50%; transition:background 0.3s,box-shadow 0.3s; background:var(--dim); }
@@ -114,30 +99,28 @@
     }
 
     /* Wider layout for the 10.1" landscape touchscreen — scales every
-       element up for glancing at while running, not just the ring/buttons. */
+       element up for glancing at while running, not just the ring/buttons.
+       max-width bumped from 980px to 1360px to actually fill a 1280px-wide
+       kiosk display instead of leaving ~150px dead margin on each side —
+       adjust to match your panel's actual resolution if it differs. */
     @media (min-width: 700px) {
-      body { max-width: 980px; }
-      .header { padding: 28px 40px; }
-      .header-title { font-size:22px; letter-spacing:5px; }
-      .nav { gap:28px; }
-      .nav a { font-size:22px; letter-spacing:2px; }
-      .ble-btn { font-size:18px; padding:14px 26px; }
+      body { max-width: 1360px; }
 
-      .mode-bar { padding:18px 40px; gap:20px; }
+      .mode-bar { padding:18px 44px; gap:20px; }
       .mode-indicator { width:18px; height:18px; }
       .mode-label { font-size:26px; letter-spacing:4px; }
-      .paused-banner { padding:16px 40px; font-size:20px; }
+      .paused-banner { padding:16px 44px; font-size:20px; }
 
-      .live-stats { padding:32px 40px; gap:56px; }
+      .live-stats { padding:40px 44px; gap:64px; }
       .ring-wrap { width:260px; height:260px; }
       .ring-kph { font-size:66px; }
       .ring-unit { font-size:17px; letter-spacing:3px; }
-      .live-grid { gap:20px 40px; }
-      .lbl { font-size:18px; letter-spacing:3px; }
-      .val { font-size:46px; }
-      .unit { font-size:19px; }
+      .live-grid { grid-template-columns:repeat(4,1fr); gap:12px 36px; }
+      .lbl { font-size:20px; letter-spacing:3px; }
+      .val { font-size:60px; }
+      .unit { font-size:22px; }
 
-      .section { padding:32px 40px; }
+      .section { padding:32px 44px; }
       .section-title { font-size:17px; letter-spacing:4px; margin-bottom:20px; }
 
       .workout-card { padding:22px 24px; }
@@ -169,10 +152,10 @@
       .btn-primary, .btn-danger { padding:28px; }
       .btn-pause, .btn-resume { padding:24px; }
       .btn-row { gap:16px; }
-      .controls-section { padding:32px 40px; gap:18px; }
+      .controls-section { padding:32px 44px; gap:18px; }
 
-      .error-bar { padding:14px 40px; font-size:17px; }
-      .not-connected-msg { padding:48px 40px; font-size:19px; }
+      .error-bar { padding:14px 44px; font-size:17px; }
+      .not-connected-msg { padding:48px 44px; font-size:19px; }
     }
   </style>
 </head>
