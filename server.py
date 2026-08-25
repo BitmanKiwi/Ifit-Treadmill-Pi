@@ -8,6 +8,7 @@ Treadmill Control Server
 
 import asyncio
 import json
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +30,10 @@ SETTLE_TIME        = 3.0
 POLL_INTERVAL_FAST = 0.5
 POLL_INTERVAL_IDLE = 3.0
 WATCH_CHARS = ['CurrentKph', 'CurrentIncline', 'Mode', 'CurrentDistance', 'CurrentTime']
+
+POST_STOP_HOLD_SECONDS = 15.0  # how long the register keeps its final value on screen
+                                # after a stop before zeroing — cut short if a new
+                                # workout's Mode goes RUNNING again first
 
 WORKOUTS_FILE      = Path(__file__).parent / 'workouts.json'
 REGISTER_LOG_FILE  = Path(__file__).parent / 'register_log.jsonl'
@@ -77,9 +82,12 @@ class WorkoutRegister:
         ignored outright — this is what makes the register hold steady
         through a paused workout (which can report an empty/zero read), a
         BLE disconnect, or a poll skipped because a command holds the lock.
-      - the register is zeroed only when the treadmill's own Mode reports
-        IDLE, i.e. genuinely stopped — never just because a read came back
-        empty, and never while merely paused.
+      - the register is zeroed once the treadmill's own Mode reports IDLE
+        AND it has stayed there for POST_STOP_HOLD_SECONDS — never just
+        because a read came back empty, and never while merely paused. This
+        keeps the final distance/time on screen for a few seconds after a
+        stop instead of blanking instantly, and a genuine new workout start
+        resets the register immediately rather than waiting out the hold.
 
     Separately, this class turns raw `Mode` transitions into a clean
     started/paused/resumed/ended state machine (self.active / self.paused),
@@ -96,6 +104,9 @@ class WorkoutRegister:
         self._last_mode     = MODE_IDLE
         self.reg_distance   = 0.0    # ratcheting register — see class docstring
         self.reg_time       = 0
+        self._stopped_at    = None   # monotonic time Mode first read IDLE — while set and
+                                      # within POST_STOP_HOLD_SECONDS, the register holds
+                                      # instead of zeroing
         self._explicit_stop = False  # set by Treadmill.stop() so its transient Mode 3→4→1
                                       # dance isn't misread as a paused-timeout end
 
@@ -128,6 +139,8 @@ class WorkoutRegister:
         if mode == MODE_RUNNING and prev != MODE_RUNNING:
             if not self.active:
                 self.active, self.paused, self.end_reason = True, False, None
+                self.reg_distance, self.reg_time = 0.0, 0  # fresh workout — discard any
+                self._stopped_at = None                     # post-stop hold left over from before
                 self._log('start', distance, time_)
             elif self.paused:
                 self.paused = False
@@ -148,10 +161,15 @@ class WorkoutRegister:
             self.active, self.paused = False, False
 
         # ── Register: ratchet up on a genuine forward reading, ignore
-        # zero/non-increasing reads, zero out only once truly IDLE. ──
+        # zero/non-increasing reads, zero out only after holding at IDLE
+        # for POST_STOP_HOLD_SECONDS. ──
         if mode == MODE_IDLE:
-            self.reg_distance, self.reg_time = 0.0, 0
+            if self._stopped_at is None:
+                self._stopped_at = time.monotonic()
+            elif time.monotonic() - self._stopped_at >= POST_STOP_HOLD_SECONDS:
+                self.reg_distance, self.reg_time = 0.0, 0
         else:
+            self._stopped_at = None
             if distance is not None and distance != 0 and distance > self.reg_distance:
                 self.reg_distance = distance
             if time_ is not None and time_ != 0 and time_ > self.reg_time:
