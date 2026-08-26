@@ -197,7 +197,7 @@
 
 <script>
   const MODES = { 1:'IDLE', 2:'RUNNING', 3:'PAUSED', 4:'SUMMARY' };
-  const MODE_COLORS = { 1:'#555', 2:'#ff8800', 3:'#ffaa00', 4:'#0088ff' };
+  const MODE_COLORS = { 1:'#ffffff', 2:'#ff8800', 3:'#ffaa00', 4:'#0088ff' };
   const CIRC = 2 * Math.PI * 54;
 
   let bleState  = 'disconnected';
@@ -243,7 +243,7 @@
   // ── Render ────────────────────────────────────────────────
   function render() {
     const s     = treadmill;
-    const color = MODE_COLORS[s.mode] || '#555';
+    const color = MODE_COLORS[s.mode] || '#ffffff';
     document.getElementById('modeIndicator').style.background = color;
     document.getElementById('modeIndicator').style.boxShadow  = `0 0 8px ${color}`;
     document.getElementById('modeLabel').textContent = MODES[s.mode] || 'UNKNOWN';

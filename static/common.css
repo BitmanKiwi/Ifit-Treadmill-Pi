@@ -14,7 +14,7 @@
   --bg: #0a0a0a; --bg2: #0f0f0f; --bg3: #1a1a1a;
   --border: #1a1a1a; --orange: #ff8800; --blue: #0088ff;
   --amber: #ffaa00; --red: #ff3333; --green: #00cc66;
-  --dim: #444; --dimmer: #333; --font: 'DM Mono', monospace;
+  --dim: #ffffff; --dimmer: #777777; --font: 'DM Mono', monospace;
 }
 
 /* ── Header / nav / BLE connect button ── */
