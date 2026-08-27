@@ -106,7 +106,7 @@
     </div>
     <div class="cell dist">
       <div class="label">DISTANCE</div>
-      <div class="value" id="dispDist">0.00<span class="unit">km</span></div>
+      <div class="value" id="dispDist">0.000<span class="unit">km</span></div>
     </div>
     <div class="cell time">
       <div class="label">TIME</div>
@@ -143,7 +143,7 @@
     document.getElementById('dispKph').innerHTML     = s.currentKph.toFixed(1) + '<span class="unit">kph</span>';
     document.getElementById('dispPace').innerHTML    = formatPace(s.currentKph) + '<span class="unit">/km</span>';
     document.getElementById('dispIncline').innerHTML = s.currentIncline.toFixed(1) + '<span class="unit">%</span>';
-    document.getElementById('dispDist').innerHTML    = (s.currentDistance/1000).toFixed(2) + '<span class="unit">km</span>';
+    document.getElementById('dispDist').innerHTML    = (s.currentDistance/1000).toFixed(3) + '<span class="unit">km</span>';
     document.getElementById('dispTime').textContent  = formatTime(s.currentTime);
 
     // Register status — makes a paused-vs-dropped workout obvious at a glance,

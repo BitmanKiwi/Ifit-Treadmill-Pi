@@ -196,7 +196,7 @@
     </div>
     <div class="live-grid">
       <div><div class="lbl">PACE</div><div class="val" id="dispPace">--:--<span class="unit">/km</span></div></div>
-      <div><div class="lbl">DISTANCE</div><div class="val" id="dispDist">0.00<span class="unit">km</span></div></div>
+      <div><div class="lbl">DISTANCE</div><div class="val" id="dispDist">0.000<span class="unit">km</span></div></div>
       <div><div class="lbl">TIME</div><div class="val" id="dispTime">0:00</div></div>
       <div><div class="lbl">INCLINE</div><div class="val" id="dispIncline">0.0<span class="unit">%</span></div></div>
     </div>
@@ -554,7 +554,7 @@
     document.getElementById('speedRing').setAttribute('stroke-dasharray', `${pct*CIRC} ${CIRC}`);
     document.getElementById('dispKph').textContent = s.currentKph.toFixed(1);
     document.getElementById('dispPace').innerHTML  = formatPace(s.currentKph) + '<span class="unit">/km</span>';
-    document.getElementById('dispDist').innerHTML    = (s.currentDistance/1000).toFixed(2) + '<span class="unit">km</span>';
+    document.getElementById('dispDist').innerHTML    = (s.currentDistance/1000).toFixed(3) + '<span class="unit">km</span>';
     document.getElementById('dispTime').textContent  = formatTime(s.currentTime);
     document.getElementById('dispIncline').innerHTML = s.currentIncline.toFixed(1) + '<span class="unit">%</span>';
   }
@@ -583,7 +583,7 @@
       document.getElementById('stepTriggerLabel').textContent = 'REMAINING';
       document.getElementById('stepRemaining').textContent =
         step.trigger === 'time' ? formatTime(remaining)
-          : (remaining >= 1000 ? (remaining/1000).toFixed(2)+'km' : Math.round(remaining)+'m');
+          : (remaining >= 1000 ? (remaining/1000).toFixed(3)+'km' : Math.round(remaining)+'m');
     }
 
     const bar = document.getElementById('stepBar');
