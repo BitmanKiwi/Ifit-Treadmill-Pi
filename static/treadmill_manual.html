@@ -17,11 +17,11 @@
     /* Live display — same format as the workout page: a ring either side
        (speed left, heart rate right) with the live stat grid between them. */
     .live-stats { padding:20px 24px; display:flex; align-items:center; justify-content:center; gap:16px; flex-wrap:nowrap; border-bottom:1px solid var(--border); }
-    .ring-wrap { position:relative; width:138px; height:138px; flex-shrink:0; }
+    .ring-wrap { position:relative; width:207px; height:207px; flex-shrink:0; }
     .ring-wrap svg { transform:rotate(-90deg); }
     .ring-center { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; }
-    .ring-kph { font-size:28px; font-weight:500; letter-spacing:-1px; line-height:1; }
-    .ring-unit { font-size:11px; color:var(--dim); letter-spacing:2px; margin-top:2px; }
+    .ring-kph { font-size:42px; font-weight:500; letter-spacing:-1px; line-height:1; }
+    .ring-unit { font-size:16px; color:var(--dim); letter-spacing:2px; margin-top:2px; }
     .live-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px 16px; flex:1; min-width:0; }
     .lbl { font-size:9px; color:var(--dim); letter-spacing:2px; margin-bottom:2px; white-space:nowrap; }
     .val { font-size:16px; letter-spacing:-0.5px; white-space:nowrap; }
@@ -87,9 +87,9 @@
          row can never wrap onto a second line again; everything shrinks
          together to fit instead. */
       .live-stats { padding:24px 44px; gap:clamp(16px, 2.4vw, 40px); }
-      .ring-wrap { width:clamp(175px, 18.75vw, 275px); height:clamp(175px, 18.75vw, 275px); }
-      .ring-kph { font-size:clamp(33px, 4.3vw, 58px); }
-      .ring-unit { font-size:clamp(13px, 1.5vw, 20px); letter-spacing:2px; }
+      .ring-wrap { width:clamp(262px, 28.12vw, 412px); height:clamp(262px, 28.12vw, 412px); }
+      .ring-kph { font-size:clamp(50px, 6.45vw, 87px); }
+      .ring-unit { font-size:clamp(20px, 2.25vw, 30px); letter-spacing:2px; }
       .live-grid { grid-template-columns:repeat(4,1fr); gap:16px clamp(10px, 1.6vw, 28px); }
       .lbl { font-size:clamp(10px, 1.3vw, 18px); letter-spacing:2px; }
       .val { font-size:clamp(20px, 2.9vw, 42px); }
@@ -273,7 +273,9 @@
   // Also drives the HR ring/value directly, so a stale reading (strap out
   // of range, battery out, etc.) shows as "no data" rather than silently
   // holding the last real number forever. ──
-  const HR_STALE_SECONDS = 2;
+  const HR_STALE_SECONDS = 10;   // pushed out from 2s — ANT+ reception can be
+                                   // genuinely glitchy, don't flag a normal
+                                   // brief gap as "no data"
 
   function renderAntDebug(s) {
     const hr    = s.hrDebug || {};
