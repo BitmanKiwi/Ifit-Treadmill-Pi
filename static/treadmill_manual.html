@@ -11,26 +11,21 @@
     body { background:var(--bg); color:#fff; font-family:var(--font); min-height:100vh; display:flex; flex-direction:column; max-width:480px; margin:0 auto; }
 
     .mode-bar { padding:8px 24px; background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
-    .mode-indicator { width:8px; height:8px; border-radius:50%; transition:background 0.3s,box-shadow 0.3s; }
-    .mode-label { font-size:11px; letter-spacing:3px; transition:color 0.3s; }
+    .mode-indicator { width:8px; height:8px; border-radius:50%; transition:background 0.3s,box-shadow 0.3s; background:var(--dim); }
+    .mode-label { font-size:11px; letter-spacing:3px; color:var(--dim); }
 
-    .speed-section { padding:32px 24px 24px; display:flex; align-items:center; justify-content:center; gap:40px; border-bottom:1px solid var(--border); }
-    .ring-wrap { position:relative; width:140px; height:140px; }
+    /* Live display — same format as the workout page: a ring either side
+       (speed left, heart rate right) with the live stat grid between them. */
+    .live-stats { padding:20px 24px; display:flex; align-items:center; justify-content:center; gap:32px; flex-wrap:wrap; border-bottom:1px solid var(--border); }
+    .ring-wrap { position:relative; width:110px; height:110px; flex-shrink:0; }
     .ring-wrap svg { transform:rotate(-90deg); }
     .ring-center { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; }
-    .ring-kph { font-size:28px; font-weight:500; letter-spacing:-1px; line-height:1; }
+    .ring-kph { font-size:22px; font-weight:500; letter-spacing:-1px; line-height:1; }
     .ring-unit { font-size:9px; color:var(--dim); letter-spacing:2px; margin-top:2px; }
-    .speed-stats { display:flex; flex-direction:column; gap:16px; }
-    .stat-label { font-size:9px; color:var(--dim); letter-spacing:2px; margin-bottom:2px; }
-    .stat-value { font-size:22px; letter-spacing:-0.5px; }
-    .stat-unit { font-size:11px; color:var(--dim); margin-left:4px; }
-
-    .stats-grid { display:grid; grid-template-columns:1fr 1fr; border-bottom:1px solid var(--border); }
-    .stat-cell { padding:16px; text-align:center; border-right:1px solid var(--border); }
-    .stat-cell:last-child { border-right:none; }
-    .stat-cell .stat-label { margin-bottom:4px; }
-    .stat-cell .stat-value { font-size:18px; }
-    #dispDist, #dispTime { font-size:32px; letter-spacing:-0.5px; }
+    .live-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px 24px; flex:1; }
+    .lbl { font-size:9px; color:var(--dim); letter-spacing:2px; margin-bottom:2px; }
+    .val { font-size:16px; letter-spacing:-0.5px; }
+    .unit { font-size:10px; color:var(--dim); margin-left:3px; }
 
     .controls { padding:24px; display:flex; flex-direction:column; gap:16px; flex:1; justify-content:center; }
     .btn-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; }
@@ -45,6 +40,9 @@
     .btn-resume:disabled { color:var(--dimmer); border-color:var(--bg3); background:#111; }
     .btn-stop { padding:16px 4px; background:var(--bg3); color:var(--red); border:1px solid var(--red); }
     .btn-stop:disabled { color:var(--dimmer); border-color:var(--bg3); background:#111; }
+
+    /* Still used by the slider headers below (PACE / INCLINE labels). */
+    .stat-label { font-size:9px; color:var(--dim); letter-spacing:2px; }
 
     .slider-card { background:var(--bg2); border-radius:4px; padding:16px; border:1px solid var(--border); }
     .slider-header { display:flex; justify-content:space-between; margin-bottom:12px; }
@@ -77,18 +75,16 @@
       .mode-indicator { width:18px; height:18px; }
       .mode-label { font-size:26px; letter-spacing:4px; }
 
-      .speed-section { padding:48px 44px 36px; gap:64px; }
-      .ring-wrap { width:300px; height:300px; }
-      .ring-kph { font-size:78px; }
-      .ring-unit { font-size:18px; letter-spacing:3px; }
-      .speed-stats { gap:28px; }
-      .stat-label { font-size:18px; letter-spacing:3px; }
-      .stat-value { font-size:54px; }
-      .stat-unit { font-size:19px; }
+      .live-stats { padding:40px 44px; gap:64px; }
+      .ring-wrap { width:260px; height:260px; }
+      .ring-kph { font-size:66px; }
+      .ring-unit { font-size:17px; letter-spacing:3px; }
+      .live-grid { grid-template-columns:1fr 1fr; gap:20px 36px; }
+      .lbl { font-size:20px; letter-spacing:3px; }
+      .val { font-size:60px; }
+      .unit { font-size:22px; }
 
-      .stat-cell { padding:30px; }
-      .stat-cell .stat-value { font-size:42px; }
-      #dispDist, #dispTime { font-size:104px; }
+      .stat-label { font-size:18px; letter-spacing:3px; }
 
       .controls { padding:36px 44px; gap:24px; }
       .btn-grid { gap:14px; }
@@ -112,7 +108,6 @@
     <nav class="nav">
       <a href="/" class="active">MANUAL</a>
       <a href="/workout">WORKOUT</a>
-      <a href="/monitor">MONITOR</a>
       <a href="/build">BUILD</a>
     </nav>
     <button class="ble-btn disconnected" id="bleBtn" onclick="toggleConnect()">CONNECT</button>
@@ -121,43 +116,40 @@
   <div class="error-bar" id="errorBar"></div>
 
   <div class="mode-bar">
-    <div class="mode-indicator" id="modeIndicator" style="background:var(--dim)"></div>
-    <span class="mode-label" id="modeLabel" style="color:var(--dim)">IDLE</span>
+    <div class="mode-indicator" id="modeIndicator"></div>
+    <span class="mode-label" id="modeLabel">IDLE</span>
   </div>
 
-  <div class="speed-section">
+  <div class="live-stats">
     <div class="ring-wrap">
-      <svg width="100%" height="100%" viewBox="0 0 140 140">
-        <circle cx="70" cy="70" r="54" fill="none" stroke="#1a1a1a" stroke-width="10"/>
-        <circle cx="70" cy="70" r="54" fill="none" stroke="#ff8800" stroke-width="10"
-          stroke-linecap="round" id="speedRing" stroke-dasharray="0 339.3"
-          style="transition:stroke-dasharray 0.5s ease;filter:drop-shadow(0 0 6px #ff8800)"/>
+      <svg width="100%" height="100%" viewBox="0 0 110 110">
+        <circle cx="55" cy="55" r="42" fill="none" stroke="#1a1a1a" stroke-width="8"/>
+        <circle cx="55" cy="55" r="42" fill="none" stroke="#ff8800" stroke-width="8"
+          stroke-linecap="round" id="speedRing" stroke-dasharray="0 263.9"
+          style="transition:stroke-dasharray 0.5s ease;filter:drop-shadow(0 0 5px #ff8800)"/>
       </svg>
       <div class="ring-center">
         <div class="ring-kph" id="dispKph">0.0</div>
         <div class="ring-unit">KPH</div>
       </div>
     </div>
-    <div class="speed-stats">
-      <div>
-        <div class="stat-label">PACE</div>
-        <div class="stat-value" id="dispPace">--:--<span class="stat-unit">/km</span></div>
-      </div>
-      <div>
-        <div class="stat-label">INCLINE</div>
-        <div class="stat-value" id="dispIncline">0.0<span class="stat-unit">%</span></div>
-      </div>
+    <div class="live-grid">
+      <div><div class="lbl">PACE</div><div class="val" id="dispPace">--:--<span class="unit">/km</span></div></div>
+      <div><div class="lbl">DISTANCE</div><div class="val" id="dispDist">0.000<span class="unit">km</span></div></div>
+      <div><div class="lbl">TIME</div><div class="val" id="dispTime">0:00</div></div>
+      <div><div class="lbl">INCLINE</div><div class="val" id="dispIncline">0.0<span class="unit">%</span></div></div>
     </div>
-  </div>
-
-  <div class="stats-grid">
-    <div class="stat-cell">
-      <div class="stat-label">DISTANCE</div>
-      <div class="stat-value" id="dispDist">0.000<span class="stat-unit">km</span></div>
-    </div>
-    <div class="stat-cell">
-      <div class="stat-label">TIME</div>
-      <div class="stat-value" id="dispTime">0:00</div>
+    <div class="ring-wrap">
+      <svg width="100%" height="100%" viewBox="0 0 110 110">
+        <circle cx="55" cy="55" r="42" fill="none" stroke="#1a1a1a" stroke-width="8"/>
+        <circle cx="55" cy="55" r="42" fill="none" stroke="#ff3333" stroke-width="8"
+          stroke-linecap="round" id="hrRing" stroke-dasharray="0 263.9"
+          style="transition:stroke-dasharray 0.5s ease;filter:drop-shadow(0 0 5px #ff3333)"/>
+      </svg>
+      <div class="ring-center">
+        <div class="ring-kph" id="dispHr">--</div>
+        <div class="ring-unit">BPM</div>
+      </div>
     </div>
   </div>
 
@@ -198,7 +190,8 @@
 <script>
   const MODES = { 1:'IDLE', 2:'RUNNING', 3:'PAUSED', 4:'SUMMARY' };
   const MODE_COLORS = { 1:'#ffffff', 2:'#ff8800', 3:'#ffaa00', 4:'#0088ff' };
-  const CIRC = 2 * Math.PI * 54;
+  const CIRC = 2 * Math.PI * 42;
+  const HR_MAX = 190;   // ring scale — full ring = 190bpm
 
   let bleState  = 'disconnected';
   let treadmill = { mode:1, currentKph:0, currentIncline:0, currentDistance:0, currentTime:0, pulse:0 };
@@ -248,12 +241,19 @@
     document.getElementById('modeIndicator').style.boxShadow  = `0 0 8px ${color}`;
     document.getElementById('modeLabel').textContent = MODES[s.mode] || 'UNKNOWN';
     document.getElementById('modeLabel').style.color = color;
+
     const pct = Math.min(s.currentKph/20, 1);
     document.getElementById('speedRing').setAttribute('stroke-dasharray', `${pct*CIRC} ${CIRC}`);
     document.getElementById('dispKph').textContent  = s.currentKph.toFixed(1);
-    document.getElementById('dispPace').innerHTML   = formatPace(s.currentKph)+'<span class="stat-unit">/km</span>';
-    document.getElementById('dispIncline').innerHTML = s.currentIncline.toFixed(1)+'<span class="stat-unit">%</span>';
-    document.getElementById('dispDist').innerHTML    = (s.currentDistance/1000).toFixed(3)+'<span class="stat-unit">km</span>';
+
+    const pulse   = s.pulse || 0;
+    const pctHr   = Math.min(pulse / HR_MAX, 1);
+    document.getElementById('hrRing').setAttribute('stroke-dasharray', `${pctHr*CIRC} ${CIRC}`);
+    document.getElementById('dispHr').textContent = pulse > 0 ? Math.round(pulse) : '--';
+
+    document.getElementById('dispPace').innerHTML    = formatPace(s.currentKph)+'<span class="unit">/km</span>';
+    document.getElementById('dispIncline').innerHTML = s.currentIncline.toFixed(1)+'<span class="unit">%</span>';
+    document.getElementById('dispDist').innerHTML    = (s.currentDistance/1000).toFixed(3)+'<span class="unit">km</span>';
     document.getElementById('dispTime').textContent  = formatTime(s.currentTime);
     renderButtons();
   }

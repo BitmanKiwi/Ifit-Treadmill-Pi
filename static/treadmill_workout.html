@@ -17,7 +17,7 @@
     .paused-banner { display:none; padding:10px 24px; background:#ffaa0010; border-bottom:1px solid #ffaa0040; font-size:10px; letter-spacing:3px; color:var(--amber); text-align:center; }
     .paused-banner.show { display:block; }
 
-    .live-stats { padding:20px 24px; display:flex; align-items:center; justify-content:center; gap:32px; border-bottom:1px solid var(--border); }
+    .live-stats { padding:20px 24px; display:flex; align-items:center; justify-content:center; gap:32px; flex-wrap:wrap; border-bottom:1px solid var(--border); }
     .ring-wrap { position:relative; width:110px; height:110px; flex-shrink:0; }
     .ring-wrap svg { transform:rotate(-90deg); }
     .ring-center { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; }
@@ -115,7 +115,7 @@
       .ring-wrap { width:260px; height:260px; }
       .ring-kph { font-size:66px; }
       .ring-unit { font-size:17px; letter-spacing:3px; }
-      .live-grid { grid-template-columns:repeat(4,1fr); gap:12px 36px; }
+      .live-grid { grid-template-columns:1fr 1fr; gap:20px 36px; }
       .lbl { font-size:20px; letter-spacing:3px; }
       .val { font-size:60px; }
       .unit { font-size:22px; }
@@ -166,7 +166,6 @@
     <nav class="nav">
       <a href="/">MANUAL</a>
       <a href="/workout" class="active">WORKOUT</a>
-      <a href="/monitor">MONITOR</a>
       <a href="/build">BUILD</a>
     </nav>
     <button class="ble-btn disconnected" id="bleBtn" onclick="toggleConnect()">CONNECT</button>
@@ -199,6 +198,18 @@
       <div><div class="lbl">DISTANCE</div><div class="val" id="dispDist">0.000<span class="unit">km</span></div></div>
       <div><div class="lbl">TIME</div><div class="val" id="dispTime">0:00</div></div>
       <div><div class="lbl">INCLINE</div><div class="val" id="dispIncline">0.0<span class="unit">%</span></div></div>
+    </div>
+    <div class="ring-wrap">
+      <svg width="100%" height="100%" viewBox="0 0 110 110">
+        <circle cx="55" cy="55" r="42" fill="none" stroke="#1a1a1a" stroke-width="8"/>
+        <circle cx="55" cy="55" r="42" fill="none" stroke="#ff3333" stroke-width="8"
+          stroke-linecap="round" id="hrRing" stroke-dasharray="0 263.9"
+          style="transition:stroke-dasharray 0.5s ease;filter:drop-shadow(0 0 5px #ff3333)"/>
+      </svg>
+      <div class="ring-center">
+        <div class="ring-kph" id="dispHr">--</div>
+        <div class="ring-unit">BPM</div>
+      </div>
     </div>
   </div>
 
@@ -350,9 +361,10 @@
   const MODES = { 1:'IDLE', 2:'RUNNING', 3:'PAUSED', 4:'SUMMARY' };
   const MODE_COLORS = { 1:'#ffffff', 2:'#ff8800', 3:'#ffaa00', 4:'#0088ff' };
   const CIRC = 2 * Math.PI * 42;
+  const HR_MAX = 190;   // ring scale — full ring = 190bpm
 
   let bleState        = 'disconnected';
-  let treadmill       = { mode:1, currentKph:0, currentIncline:0, currentDistance:0, currentTime:0 };
+  let treadmill       = { mode:1, currentKph:0, currentIncline:0, currentDistance:0, currentTime:0, pulse:0 };
   let allWorkouts     = [];
   let selectedWorkout = null;
   let flatSteps       = [];
@@ -553,6 +565,12 @@
     const pct = Math.min(s.currentKph / 20, 1);
     document.getElementById('speedRing').setAttribute('stroke-dasharray', `${pct*CIRC} ${CIRC}`);
     document.getElementById('dispKph').textContent = s.currentKph.toFixed(1);
+
+    const pulse = s.pulse || 0;
+    const pctHr = Math.min(pulse / HR_MAX, 1);
+    document.getElementById('hrRing').setAttribute('stroke-dasharray', `${pctHr*CIRC} ${CIRC}`);
+    document.getElementById('dispHr').textContent = pulse > 0 ? Math.round(pulse) : '--';
+
     document.getElementById('dispPace').innerHTML  = formatPace(s.currentKph) + '<span class="unit">/km</span>';
     document.getElementById('dispDist').innerHTML    = (s.currentDistance/1000).toFixed(3) + '<span class="unit">km</span>';
     document.getElementById('dispTime').textContent  = formatTime(s.currentTime);

@@ -303,8 +303,12 @@ class Treadmill:
         async with self.lock:
             try:
                 values    = await self.client.read_characteristics(WATCH_CHARS)
-                pulse_raw = values.get('Pulse', 0)
-                pulse     = pulse_raw.get('pulse', 0) if isinstance(pulse_raw, dict) else pulse_raw
+                # Real chest-strap HR (via the ANT+ bridge) rather than the
+                # treadmill's own hand-contact sensors — 'Pulse' was never
+                # actually requested (not in WATCH_CHARS above) so this was
+                # previously always 0 regardless. _get_hr() is a safe no-op
+                # returning 0 if the ANT+ bridge isn't running.
+                pulse     = _get_hr()
                 mode      = values.get('Mode', 1)
                 distance  = values.get('CurrentDistance', 0)
                 time_     = values.get('CurrentTime', 0)
@@ -358,6 +362,9 @@ def save_workouts(workouts: list):
 treadmill = Treadmill()
 clients: set[WebSocket] = set()
 poll_task = None
+_get_hr = lambda: 0   # replaced with ant_bridge's real getter in lifespan()
+                       # if the ANT+ bridge starts successfully; stays a
+                       # harmless no-op (pulse always reads 0) otherwise
 
 
 # ============================================================
@@ -405,6 +412,7 @@ def ensure_poll():
 # ============================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _get_hr
     # ANT+ bridge (SDM footpod broadcast + HR passthrough) — deliberately
     # imported here rather than at module level, so even an import-time
     # failure (e.g. openant not installed, USB dongle missing) can never
@@ -412,8 +420,9 @@ async def lifespan(app: FastAPI):
     # read-only with respect to `treadmill` — it only ever reads
     # _cached_status, never touches BLE/the lock/the register.
     try:
-        from ant_bridge import start_ant_bridge
+        from ant_bridge import start_ant_bridge, get_latest_hr
         start_ant_bridge(treadmill)
+        _get_hr = get_latest_hr
         print('ANT+ bridge started')
     except Exception as e:
         print(f'ANT+ bridge failed to start (continuing without it): {e}')
@@ -444,10 +453,6 @@ async def workout_page():
 @app.get('/build')
 async def build_page():
     return FileResponse(STATIC_DIR / 'treadmill_build.html')
-
-@app.get('/monitor')
-async def monitor_page():
-    return FileResponse(STATIC_DIR / 'treadmill_monitor.html')
 
 @app.get('/api/workouts')
 async def get_workouts():
