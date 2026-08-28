@@ -405,6 +405,19 @@ def ensure_poll():
 # ============================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # ANT+ bridge (SDM footpod broadcast + HR passthrough) — deliberately
+    # imported here rather than at module level, so even an import-time
+    # failure (e.g. openant not installed, USB dongle missing) can never
+    # prevent the treadmill control server itself from starting. This is
+    # read-only with respect to `treadmill` — it only ever reads
+    # _cached_status, never touches BLE/the lock/the register.
+    try:
+        from ant_bridge import start_ant_bridge
+        start_ant_bridge(treadmill)
+        print('ANT+ bridge started')
+    except Exception as e:
+        print(f'ANT+ bridge failed to start (continuing without it): {e}')
+
     yield
     await treadmill.disconnect()
 
