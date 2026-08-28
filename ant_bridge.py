@@ -371,8 +371,7 @@ def _run_node(get_live_data, blocking):
     # page sent TWICE in a row before switching (page1,page1,page2,page2,...)
     # for compatibility with lower-rate receivers, with common pages 80/81
     # injected every 65th message.
-    _tx_state = {"msg_count": 0, "page_pair": 0, "page_rep": 0, "last_tx_time": None,
-                 "intervals": []}
+    _tx_state = {"msg_count": 0, "page_pair": 0, "page_rep": 0}
 
     def on_sdm_broadcast_tx(data=None):
         # openant calls this with a `data` arg (from Node._main()'s
@@ -382,18 +381,11 @@ def _run_node(get_live_data, blocking):
         st = _tx_state
         st["msg_count"] += 1
 
-        now = time.time()
-        if st["last_tx_time"] is not None:
-            st["intervals"].append(now - st["last_tx_time"])
-        st["last_tx_time"] = now
-
         if st["msg_count"] % 65 == 0:
             # inject a common page — alternate 80/81 each time this fires
-            page_name = "80" if (st["msg_count"] // 65) % 2 == 0 else "81"
-            payload = _encode_page80() if page_name == "80" else _encode_page81()
+            payload = _encode_page80() if (st["msg_count"] // 65) % 2 == 0 else _encode_page81()
         else:
             kph, distance_m = get_live_data()
-            page_name = "1" if st["page_pair"] == 0 else "2"
             payload = _encode_page1(kph, distance_m) if st["page_pair"] == 0 else _encode_page2(kph)
             st["page_rep"] += 1
             if st["page_rep"] >= 2:      # sent this page twice — switch to the other
@@ -401,16 +393,6 @@ def _run_node(get_live_data, blocking):
                 st["page_pair"] ^= 1
 
         sdm_channel.send_broadcast_data(list(payload))   # confirmed: wants List[int]
-
-        if st["msg_count"] % 20 == 0:   # throttled debug — roughly once every ~5s at 4Hz
-            kph, distance_m = get_live_data()
-            recent = st["intervals"][-20:]
-            avg_period = sum(recent) / len(recent) if recent else 0
-            expected_period = SDM_CHANNEL_PERIOD / 32768
-            print(f"[ant_bridge] TX #{st['msg_count']} page={page_name} "
-                  f"kph={kph:.1f} dist={distance_m:.1f}m bytes={list(payload)} "
-                  f"| avg_period={avg_period:.4f}s (expected {expected_period:.4f}s, "
-                  f"drift={(avg_period/expected_period - 1)*100:+.1f}%)")
 
     sdm_channel.on_broadcast_tx_data = on_sdm_broadcast_tx
     sdm_channel.open()
