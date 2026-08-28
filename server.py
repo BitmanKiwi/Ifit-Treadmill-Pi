@@ -337,6 +337,8 @@ class Treadmill:
             'currentDistance': distance,
             'currentTime'    : time,
             'pulse'          : pulse,
+            'antBridgeOk'    : _ant_bridge_ok,   # on-screen ANT+ diagnostics —
+            'hrDebug'        : _get_hr_debug(),  # see get_hr_debug() in ant_bridge.py
             'register'       : self.register.to_dict(),
         }
 
@@ -359,12 +361,19 @@ def save_workouts(workouts: list):
 # ============================================================
 # APP STATE
 # ============================================================
-treadmill = Treadmill()
-clients: set[WebSocket] = set()
-poll_task = None
 _get_hr = lambda: 0   # replaced with ant_bridge's real getter in lifespan()
                        # if the ANT+ bridge starts successfully; stays a
                        # harmless no-op (pulse always reads 0) otherwise
+_get_hr_debug = lambda: {"bpm": 0, "found": False, "ageSeconds": None}
+_ant_bridge_ok = False   # for on-screen diagnostics — lets the touchscreen
+                          # itself show whether ANT+ started at all, without
+                          # needing to SSH in and check the journal
+                          # (defined before Treadmill() below since __init__
+                          # calls _make_status() immediately, which reads these)
+
+treadmill = Treadmill()
+clients: set[WebSocket] = set()
+poll_task = None
 
 
 # ============================================================
@@ -412,7 +421,7 @@ def ensure_poll():
 # ============================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _get_hr
+    global _get_hr, _get_hr_debug, _ant_bridge_ok
     # ANT+ bridge (SDM footpod broadcast + HR passthrough) — deliberately
     # imported here rather than at module level, so even an import-time
     # failure (e.g. openant not installed, USB dongle missing) can never
@@ -420,9 +429,11 @@ async def lifespan(app: FastAPI):
     # read-only with respect to `treadmill` — it only ever reads
     # _cached_status, never touches BLE/the lock/the register.
     try:
-        from ant_bridge import start_ant_bridge, get_latest_hr
+        from ant_bridge import start_ant_bridge, get_latest_hr, get_hr_debug
         start_ant_bridge(treadmill)
         _get_hr = get_latest_hr
+        _get_hr_debug = get_hr_debug
+        _ant_bridge_ok = True
         print('ANT+ bridge started')
     except Exception as e:
         print(f'ANT+ bridge failed to start (continuing without it): {e}')

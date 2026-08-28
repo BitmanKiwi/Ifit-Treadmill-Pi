@@ -115,6 +115,56 @@ SDM_RF_FREQ = 57             # 2457 MHz — standard ANT+ frequency (all ANT+ pr
                               # confirmed correct — it matches the exact same
                               # constant in the verified real-world source below.
 
+# ── Live HR state, updated by the HR strap's RX callback ────────────
+class _HRState:
+    def __init__(self):
+        self.bpm = 0
+        self.found = False        # True once the ANT+ channel has ever
+                                    # detected the strap (on_found fired)
+        self.last_update = None   # time.time() of the last bpm reading,
+                                    # or None if never received one
+        self.lock = threading.Lock()
+
+    def mark_found(self):
+        with self.lock:
+            self.found = True
+
+    def update(self, bpm):
+        with self.lock:
+            self.bpm = bpm
+            self.last_update = time.time()
+
+    def get(self):
+        with self.lock:
+            return self.bpm
+
+    def debug_snapshot(self):
+        with self.lock:
+            age = (time.time() - self.last_update) if self.last_update else None
+            return {"bpm": self.bpm, "found": self.found, "ageSeconds": age}
+
+
+_hr_state = _HRState()
+
+
+def get_latest_hr():
+    """Returns the most recent heart rate reading (bpm) from the ANT+ HR
+    strap, or 0 if none received yet (strap not worn/out of range/ant_bridge
+    not running). Call this from server.py to include real HR data in the
+    broadcast status — thread-safe, no import-time dependency on the ANT+
+    node actually having started successfully."""
+    return _hr_state.get()
+
+
+def get_hr_debug():
+    """Returns {bpm, found, ageSeconds} for on-screen diagnostics — 'found'
+    is True once the channel has ever detected the strap at all (even if
+    readings have since gone stale), 'ageSeconds' is how long ago the last
+    reading arrived (None if never). Lets you tell 'strap never paired'
+    apart from 'was working, now stale' without SSHing in to check logs."""
+    return _hr_state.debug_snapshot()
+
+
 # ── Shared live state, updated by the simulation thread ─────────────
 class LiveState:
     def __init__(self):
@@ -304,10 +354,12 @@ def _encode_page81():
 
 # ── ANT+ node setup ──────────────────────────────────────────────
 def on_hr_found():
+    _hr_state.mark_found()
     print(f"[ant_bridge] HR strap found: device_id={hr_device.device_id}")
 
 
 def on_hr_data(data: HeartRateData):
+    _hr_state.update(data.heart_rate)
     print(f"[ant_bridge] HR: {data.heart_rate} bpm")
 
 

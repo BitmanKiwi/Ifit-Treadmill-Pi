@@ -88,6 +88,8 @@
     .error-bar { display:none; padding:8px 24px; background:#ff333310; border-bottom:1px solid #ff333340; font-size:10px; letter-spacing:2px; color:var(--red); }
     .error-bar.show { display:block; }
 
+    .ant-debug { padding:6px 24px 12px; text-align:center; font-size:9px; letter-spacing:1px; color:var(--dimmer); }
+
     .not-connected-msg { padding:32px 24px; text-align:center; font-size:11px; color:var(--dim); letter-spacing:2px; }
 
     /* The four state screens (not-connected / selector / belt-running /
@@ -158,6 +160,7 @@
       .controls-section { padding:32px 44px; gap:18px; }
 
       .error-bar { padding:14px 44px; font-size:17px; }
+      .ant-debug { padding:8px 44px 16px; font-size:14px; }
       .not-connected-msg { padding:48px 44px; font-size:19px; }
     }
   </style>
@@ -215,6 +218,8 @@
       </div>
     </div>
   </div>
+
+  <div class="ant-debug" id="antDebug">ANT: -- · HR: --</div>
 
   <!-- NOT CONNECTED -->
   <div id="notConnectedMsg" class="not-connected-msg">
@@ -578,6 +583,24 @@
     document.getElementById('dispDist').innerHTML    = (s.currentDistance/1000).toFixed(3) + '<span class="unit">km</span>';
     document.getElementById('dispTime').textContent  = formatTime(s.currentTime);
     document.getElementById('dispIncline').innerHTML = s.currentIncline.toFixed(1) + '<span class="unit">%</span>';
+    renderAntDebug(s);
+  }
+
+  // ── ANT+/HR diagnostics — see it on-screen, no SSH round trip needed ──
+  function renderAntDebug(s) {
+    const el = document.getElementById('antDebug');
+    if (!el) return;
+    if (!s.antBridgeOk) { el.textContent = 'ANT: FAILED TO START'; return; }
+    const hr = s.hrDebug || {};
+    let hrStatus;
+    if (!hr.found) {
+      hrStatus = 'strap not found';
+    } else if (hr.ageSeconds == null) {
+      hrStatus = 'found, no reading yet';
+    } else {
+      hrStatus = `${hr.bpm} bpm, ${hr.ageSeconds.toFixed(0)}s ago`;
+    }
+    el.textContent = `ANT: OK  ·  HR: ${hrStatus}`;
   }
 
   // ── RENDER ACTIVE STEP ────────────────────────────────────
