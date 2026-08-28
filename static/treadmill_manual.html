@@ -65,11 +65,14 @@
        UI being squeezed into a narrow phone-width column with dead space
        either side, and scales every element up for glancing at while
        actually running, not just reading at arm's length.
-       max-width bumped from 980px to 1360px to actually fill a 1280px-wide
-       kiosk display — adjust to match your panel's actual resolution if
-       it differs. */
+       No max-width cap here (removed after a fixed 1360px guess left
+       visible black bars on the real, wider panel) — body fills whatever
+       the actual viewport width is; the live-stats row's own content is
+       independently size-capped via clamp() so it doesn't stretch to
+       comical width on a very wide screen, without needing body itself
+       to be artificially narrowed. */
     @media (min-width: 700px) {
-      body { max-width: 1360px; }
+      body { max-width: none; }
 
       .mode-bar { padding:18px 44px; gap:20px; }
       .mode-indicator { width:18px; height:18px; }
