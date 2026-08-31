@@ -27,6 +27,18 @@
     .val { font-size:16px; letter-spacing:-0.5px; white-space:nowrap; }
     .unit { font-size:10px; color:var(--dim); margin-left:3px; }
 
+    /* HR ring reuses .ring-kph/.ring-unit sizing exactly (same clamp rules
+       below) — only the colour differs, via this modifier class. */
+    .hr-color { color: var(--red); }
+
+    /* ANT+ diagnostics strip — mirrors .mode-bar's proportions/pattern so
+       it reads as part of the same status-bar family, not a bolted-on
+       debug widget. DIAG — remove this block (and its HTML/JS) once the
+       TX/RX timing question is resolved and ant_bridge.py's own DIAG
+       block is stripped. */
+    .hr-diag-bar { padding:6px 24px; background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; font-size:9px; letter-spacing:1.5px; color:var(--dim); }
+    .hr-diag-dot { width:7px; height:7px; border-radius:50%; background:var(--dim); flex-shrink:0; transition:background 0.3s,box-shadow 0.3s; }
+
     .controls { padding:24px; display:flex; flex-direction:column; gap:16px; flex:1; justify-content:center; }
     .btn-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; }
     button { font-family:var(--font); border:none; border-radius:4px; cursor:pointer; font-size:11px; letter-spacing:1px; transition:all 0.2s; white-space:nowrap; }
@@ -93,6 +105,9 @@
       .val { font-size:clamp(20px, 2.9vw, 42px); }
       .unit { font-size:clamp(10px, 1.3vw, 18px); }
 
+      .hr-diag-bar { padding:10px 44px; font-size:15px; letter-spacing:2px; gap:14px; }
+      .hr-diag-dot { width:14px; height:14px; }
+
       .stat-label { font-size:18px; letter-spacing:3px; }
 
       .controls { padding:36px 44px; gap:24px; }
@@ -148,6 +163,25 @@
       <div><div class="lbl">TIME</div><div class="val" id="dispTime">0:00</div></div>
       <div><div class="lbl">INCLINE</div><div class="val" id="dispIncline">0.0<span class="unit">%</span></div></div>
     </div>
+    <div class="ring-wrap">
+      <svg width="100%" height="100%" viewBox="0 0 110 110">
+        <circle cx="55" cy="55" r="42" fill="none" stroke="#1a1a1a" stroke-width="8"/>
+        <circle cx="55" cy="55" r="42" fill="none" stroke="var(--red)" stroke-width="8"
+          stroke-linecap="round" id="hrRing" stroke-dasharray="0 263.9"
+          style="transition:stroke-dasharray 0.5s ease;filter:drop-shadow(0 0 5px var(--red))"/>
+      </svg>
+      <div class="ring-center">
+        <div class="ring-kph hr-color" id="dispBpm">--</div>
+        <div class="ring-unit">BPM</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIAG — ANT+ TX/RX diagnostics strip. Strip alongside ant_bridge.py's
+       DIAG block once the timing question is resolved. -->
+  <div class="hr-diag-bar">
+    <span class="hr-diag-dot" id="hrDiagDot"></span>
+    <span id="hrDiagText">ANT+ — waiting for data…</span>
   </div>
 
   <div class="controls">
@@ -188,9 +222,11 @@
   const MODES = { 1:'IDLE', 2:'RUNNING', 3:'PAUSED', 4:'SUMMARY' };
   const MODE_COLORS = { 1:'#ffffff', 2:'#ff8800', 3:'#ffaa00', 4:'#0088ff' };
   const CIRC = 2 * Math.PI * 42;
+  const MAX_BPM = 200;   // ring fills at this bpm — no per-user max HR stored
+                          // anywhere yet, this is just a sane visual scale
 
   let bleState  = 'disconnected';
-  let treadmill = { mode:1, currentKph:0, currentIncline:0, currentDistance:0, currentTime:0, pulse:0 };
+  let treadmill = { mode:1, currentKph:0, currentIncline:0, currentDistance:0, currentTime:0, pulse:0, hrDebug:null };
 
   // ── WebSocket ─────────────────────────────────────────────
   const ws = new WebSocket('ws://192.168.1.45/ws');
@@ -242,11 +278,38 @@
     document.getElementById('speedRing').setAttribute('stroke-dasharray', `${pct*CIRC} ${CIRC}`);
     document.getElementById('dispKph').textContent  = s.currentKph.toFixed(1);
 
+    const bpm = s.pulse || 0;
+    const bpmPct = Math.min(bpm/MAX_BPM, 1);
+    document.getElementById('hrRing').setAttribute('stroke-dasharray', `${bpmPct*CIRC} ${CIRC}`);
+    document.getElementById('dispBpm').textContent = bpm > 0 ? bpm : '--';
+    renderHrDiag(s.hrDebug);
+
     document.getElementById('dispPace').innerHTML    = formatPace(s.currentKph)+'<span class="unit">/km</span>';
     document.getElementById('dispIncline').innerHTML = s.currentIncline.toFixed(1)+'<span class="unit">%</span>';
     document.getElementById('dispDist').innerHTML    = (s.currentDistance/1000).toFixed(3)+'<span class="unit">km</span>';
     document.getElementById('dispTime').textContent  = formatTime(s.currentTime);
     renderButtons();
+  }
+
+  // DIAG — renders the ANT+ TX/RX diagnostics strip from status.hrDebug
+  // (see get_hr_debug() in ant_bridge.py). Strip alongside that DIAG
+  // block once the timing question is resolved.
+  function renderHrDiag(hr) {
+    const dot  = document.getElementById('hrDiagDot');
+    const text = document.getElementById('hrDiagText');
+    if (!hr) { dot.style.background = 'var(--dim)'; dot.style.boxShadow = 'none'; text.textContent = 'ANT+ — no data'; return; }
+
+    const age = hr.ageSeconds;
+    const isFresh = age !== null && age !== undefined && age < 3;
+    dot.style.background = !hr.found ? 'var(--dim)' : (isFresh ? 'var(--green)' : 'var(--red)');
+    dot.style.boxShadow  = isFresh ? '0 0 6px var(--green)' : 'none';
+
+    const parts = [];
+    parts.push(!hr.found ? 'HR NOT FOUND' : (isFresh ? 'HR OK' : `HR STALE ${age.toFixed(1)}s`));
+    if (hr.lastHrGapMs   != null) parts.push(`gap ${Math.round(hr.lastHrGapMs)}ms`);
+    if (hr.maxHrGapMs    != null) parts.push(`max ${Math.round(hr.maxHrGapMs)}ms`);
+    if (hr.sdmTxEnabled  != null) parts.push(`TX ${hr.sdmTxEnabled ? 'ON' : 'OFF'}`);
+    text.textContent = parts.join(' · ');
   }
 
   function renderButtons() {

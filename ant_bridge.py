@@ -115,6 +115,11 @@ SDM_RF_FREQ = 57             # 2457 MHz — standard ANT+ frequency (all ANT+ pr
                               # confirmed correct — it matches the exact same
                               # constant in the verified real-world source below.
 
+# DIAG — set False to run RX-only (no SDM channel opened at all), to isolate
+# whether the SDM TX channel is the cause of HR RX staleness. Strip this
+# whole DIAG block (search "DIAG") once the timing question is answered.
+ENABLE_SDM_TX = True
+
 # ── Live HR state, updated by the HR strap's RX callback ────────────
 class _HRState:
     def __init__(self):
@@ -147,6 +152,55 @@ class _HRState:
 _hr_state = _HRState()
 
 
+# DIAG — tracks when the SDM TX callback last returned, and how long its
+# send_broadcast_data() call took, plus a running record of the gap between
+# TX returns and the next HR reading (last + worst-case since bridge start),
+# so both the console log and get_hr_debug() can report it. Strip this whole
+# DIAG block once the timing question is answered.
+class _TxTiming:
+    def __init__(self):
+        self.last_tx_return = None
+        self.last_tx_duration = None
+        self.last_hr_gap = None       # seconds — most recent HR reading's gap
+        self.max_hr_gap = None        # seconds — worst gap seen since start
+        self.max_hr_gap_at = None     # time.time() when that max occurred
+        self.lock = threading.Lock()
+
+    def record_tx(self, duration):
+        with self.lock:
+            self.last_tx_return = time.time()
+            self.last_tx_duration = duration
+
+    def gap_since_last_tx(self):
+        with self.lock:
+            if self.last_tx_return is None:
+                return None, None
+            return time.time() - self.last_tx_return, self.last_tx_duration
+
+    def record_hr_gap(self, gap):
+        with self.lock:
+            self.last_hr_gap = gap
+            if self.max_hr_gap is None or gap > self.max_hr_gap:
+                self.max_hr_gap = gap
+                self.max_hr_gap_at = time.time()
+
+    def debug_snapshot(self):
+        with self.lock:
+            return {
+                "lastTxDurationMs": round(self.last_tx_duration * 1000, 1)
+                    if self.last_tx_duration is not None else None,
+                "lastHrGapMs": round(self.last_hr_gap * 1000, 1)
+                    if self.last_hr_gap is not None else None,
+                "maxHrGapMs": round(self.max_hr_gap * 1000, 1)
+                    if self.max_hr_gap is not None else None,
+                "maxHrGapAgeSeconds": (time.time() - self.max_hr_gap_at)
+                    if self.max_hr_gap_at is not None else None,
+            }
+
+
+_tx_timing = _TxTiming()
+
+
 def get_latest_hr():
     """Returns the most recent heart rate reading (bpm) from the ANT+ HR
     strap, or 0 if none received yet (strap not worn/out of range/ant_bridge
@@ -161,8 +215,17 @@ def get_hr_debug():
     is True once the channel has ever detected the strap at all (even if
     readings have since gone stale), 'ageSeconds' is how long ago the last
     reading arrived (None if never). Lets you tell 'strap never paired'
-    apart from 'was working, now stale' without SSHing in to check logs."""
-    return _hr_state.debug_snapshot()
+    apart from 'was working, now stale' without SSHing in to check logs.
+
+    DIAG — also includes lastTxDurationMs, lastHrGapMs, maxHrGapMs,
+    maxHrGapAgeSeconds (see _TxTiming above) and sdmTxEnabled (mirrors
+    ENABLE_SDM_TX), so the TX/RX timing test is visible anywhere
+    get_hr_debug() is already surfaced, not just the console log. Strip
+    once the timing question is answered."""
+    snapshot = _hr_state.debug_snapshot()
+    snapshot.update(_tx_timing.debug_snapshot())   # DIAG
+    snapshot["sdmTxEnabled"] = ENABLE_SDM_TX        # DIAG
+    return snapshot
 
 
 # ── Shared live state, updated by the simulation thread ─────────────
@@ -359,6 +422,11 @@ def on_hr_found():
 
 
 def on_hr_data(data: HeartRateData):
+    gap, tx_dur = _tx_timing.gap_since_last_tx()   # DIAG
+    if gap is not None:                            # DIAG
+        _tx_timing.record_hr_gap(gap)               # DIAG
+        print(f"[ant_bridge][diag] HR callback fired {gap*1000:.1f}ms after last TX "
+              f"return (that TX call took {tx_dur*1000:.1f}ms)")
     _hr_state.update(data.heart_rate)
     print(f"[ant_bridge] HR: {data.heart_rate} bpm")
 
@@ -414,10 +482,13 @@ def _run_node(get_live_data, blocking):
     #     confirmed exact signature; network_number default (0x00) matches
     #     the network key we set above
     # ══════════════════════════════════════════════════════════════
-    sdm_channel = node.new_channel(Channel.Type.BIDIRECTIONAL_TRANSMIT)
-    sdm_channel.set_id(SDM_DEVICE_ID, SDM_DEVICE_TYPE, SDM_TRANS_TYPE)
-    sdm_channel.set_period(SDM_CHANNEL_PERIOD)
-    sdm_channel.set_rf_freq(SDM_RF_FREQ)
+    # DIAG — sdm_channel stays None in RX-only mode (ENABLE_SDM_TX=False)
+    sdm_channel = None
+    if ENABLE_SDM_TX:
+        sdm_channel = node.new_channel(Channel.Type.BIDIRECTIONAL_TRANSMIT)
+        sdm_channel.set_id(SDM_DEVICE_ID, SDM_DEVICE_TYPE, SDM_TRANS_TYPE)
+        sdm_channel.set_period(SDM_CHANNEL_PERIOD)
+        sdm_channel.set_rf_freq(SDM_RF_FREQ)
 
     # Cycling pattern per Nordic's documented SDM TX behaviour: each data
     # page sent TWICE in a row before switching (page1,page1,page2,page2,...)
@@ -444,10 +515,15 @@ def _run_node(get_live_data, blocking):
                 st["page_rep"] = 0
                 st["page_pair"] ^= 1
 
+        _t0 = time.time()                                          # DIAG
         sdm_channel.send_broadcast_data(list(payload))   # confirmed: wants List[int]
+        _tx_timing.record_tx(time.time() - _t0)                    # DIAG
 
-    sdm_channel.on_broadcast_tx_data = on_sdm_broadcast_tx
-    sdm_channel.open()
+    if ENABLE_SDM_TX:                             # DIAG
+        sdm_channel.on_broadcast_tx_data = on_sdm_broadcast_tx
+        sdm_channel.open()
+    else:                                          # DIAG
+        print("[ant_bridge] DIAG: ENABLE_SDM_TX=False — RX-only run, no SDM channel opened")
     # ══════════════════════════════════════════════════════════════
 
     def _start_and_cleanup():
@@ -457,7 +533,8 @@ def _run_node(get_live_data, blocking):
             print("\n[ant_bridge] stopping...")
         finally:
             hr_device.close_channel()
-            sdm_channel.close()
+            if sdm_channel is not None:   # DIAG
+                sdm_channel.close()
             node.stop()
 
     if blocking:

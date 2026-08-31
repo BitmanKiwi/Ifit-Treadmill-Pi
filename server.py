@@ -364,7 +364,15 @@ def save_workouts(workouts: list):
 _get_hr = lambda: 0   # replaced with ant_bridge's real getter in lifespan()
                        # if the ANT+ bridge starts successfully; stays a
                        # harmless no-op (pulse always reads 0) otherwise
-_get_hr_debug = lambda: {"bpm": 0, "found": False, "ageSeconds": None}
+_get_hr_debug = lambda: {
+    "bpm": 0, "found": False, "ageSeconds": None,
+    # DIAG — matches ant_bridge.get_hr_debug()'s enriched shape once it
+    # starts, so hrDebug has a consistent key set even before the bridge
+    # is up. Strip alongside ant_bridge.py's DIAG block once done.
+    "lastTxDurationMs": None, "lastHrGapMs": None,
+    "maxHrGapMs": None, "maxHrGapAgeSeconds": None,
+    "sdmTxEnabled": None,
+}
 _ant_bridge_ok = False   # for on-screen diagnostics — lets the touchscreen
                           # itself show whether ANT+ started at all, without
                           # needing to SSH in and check the journal
