@@ -216,6 +216,7 @@
       <div><div class="lbl">DISTANCE</div><div class="val" id="dispDist">0.000<span class="unit">km</span></div></div>
       <div><div class="lbl">TIME</div><div class="val" id="dispTime">0:00</div></div>
       <div><div class="lbl">INCLINE</div><div class="val" id="dispIncline">0.0<span class="unit">%</span></div></div>
+      <div><div class="lbl">TIME OF DAY</div><div class="val" id="dispClock" style="color:#fff">--:--</div></div>
     </div>
     <div class="ring-wrap">
       <svg width="100%" height="100%" viewBox="0 0 110 110">
@@ -742,6 +743,18 @@
     if (errorTimer) clearTimeout(errorTimer);
     errorTimer = setTimeout(() => el.classList.remove('show'), 4000);
   }
+
+  // ── Clock (time of day, not a countdown/duration) ───────────
+  function updateClock() {
+    const now = new Date();
+    let h = now.getHours();
+    const m = String(now.getMinutes()).padStart(2, '0');
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12; if (h === 0) h = 12;
+    document.getElementById('dispClock').textContent = `${h}:${m} ${ampm}`;
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
 
   // ── INIT ──────────────────────────────────────────────────
   // Load saved workouts from Pi
