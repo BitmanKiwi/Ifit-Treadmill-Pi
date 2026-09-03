@@ -118,7 +118,7 @@ SDM_RF_FREQ = 57             # 2457 MHz — standard ANT+ frequency (all ANT+ pr
 # DIAG — set False to run RX-only (no SDM channel opened at all), to isolate
 # whether the SDM TX channel is the cause of HR RX staleness. Strip this
 # whole DIAG block (search "DIAG") once the timing question is answered.
-ENABLE_SDM_TX = True
+ENABLE_SDM_TX = False
 
 # ── Live HR state, updated by the HR strap's RX callback ────────────
 class _HRState:
